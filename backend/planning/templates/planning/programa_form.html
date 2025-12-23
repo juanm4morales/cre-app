@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · CRE{% endblock %}
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h1 class="h4 mb-3">{{ title }}</h1>
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="id_anio_academico" class="form-label">Año Académico</label>
+              {{ form.anio_academico }}
+              {% if form.anio_academico.help_text %}
+                <div class="form-text">{{ form.anio_academico.help_text }}</div>
+              {% endif %}
+              {{ form.anio_academico.errors }}
+            </div>
+
+            <div class="mb-3">
+              <label for="id_descripcion" class="form-label">Descripción</label>
+              {{ form.descripcion }}
+              {% if form.descripcion.help_text %}
+                <div class="form-text">{{ form.descripcion.help_text }}</div>
+              {% endif %}
+              {{ form.descripcion.errors }}
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> Guardar
+              </button>
+              <a class="btn btn-outline-secondary" href="{% url 'dashboard_ec' %}">
+                <i class="bi bi-x-circle"></i> Cancelar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

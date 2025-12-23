@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Actividades · CRE{% endblock %}
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h4 mb-0"><i class="bi bi-list-task"></i> Actividades</h1>
+      <small class="text-muted">Docente: <strong>{{ user_name }}</strong></small>
+    </div>
+    <div>
+      <a href="{% url 'actividad_nueva' %}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> Nueva actividad</a>
+      <a href="{% url 'dashboard_ec' %}" class="btn btn-outline-secondary"><i class="bi bi-speedometer2"></i> Dashboard</a>
+    </div>
+  </div>
+
+  {% if actividades %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Año</th>
+            <th>Unidad</th>
+            <th>Descripción</th>
+            <th>Tipo</th>
+            <th class="text-end">Horas</th>
+            <th class="text-center">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for act in actividades %}
+            <tr>
+              <td><span class="badge bg-info">{{ act.unidad_programa.programa.anio_academico }}</span></td>
+              <td>U{{ act.unidad_programa.numero }}</td>
+              <td>{{ act.descripcion }}</td>
+              <td><span class="badge bg-secondary">{{ act.tipo_actividad.nombre }}</span></td>
+              <td class="text-end"><strong>{{ act.horas }}h</strong></td>
+              <td class="text-center">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'actividad_editar' act.pk %}"><i class="bi bi-pencil"></i></a>
+                <form method="post" action="{% url 'actividad_eliminar' act.pk %}" style="display:inline;" onsubmit="return confirm('¿Eliminar esta actividad?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="alert alert-info"><i class="bi bi-info-circle"></i> No hay actividades cargadas. <a href="{% url 'dashboard_ec' %}">Crea un programa</a> para comenzar.</div>
+  {% endif %}
+{% endblock %}

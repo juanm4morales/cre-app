@@ -5,7 +5,7 @@ from .models import AsignacionDocente, TipoActividad, Actividad
 # Register your models here.
 @admin.register(AsignacionDocente)
 class AsignacionDocenteAdmin(admin.ModelAdmin):
-    list_display = ('docente', 'espacio_curricular__plan_estudio__carrera', 'categoria')
+    list_display = ('docente', 'espacio_curricular', 'categoria')
     list_filter = ('categoria',)
     search_fields = ('docente__username', 'espacio_curricular__nombre')
     
@@ -16,5 +16,6 @@ class TipoActividadAdmin(admin.ModelAdmin):
     
 @admin.register(Actividad)
 class ActividadAdmin(admin.ModelAdmin):
-    list_display = ('asignacion_docente', 'tipo_actividad', 'descripcion', 'horas')
-    search_fields = ('asignacion_docente__docente__username', 'descripcion')
+    list_display = ('programa', 'modulo', 'tipo_actividad', 'descripcion', 'horas')
+    list_filter = ('modulo', 'tipo_actividad')
+    search_fields = ('programa__plan_estudio_ec__espacio_curricular__nombre', 'descripcion')

@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión · CRE{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-8 col-md-6 col-lg-4">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h1 class="h4 mb-3"><i class="bi bi-box-arrow-in-right"></i> Iniciar sesión</h1>
+
+        {% if form.errors %}
+          <div class="alert alert-danger">Usuario y/o contraseña inválidos. Intenta nuevamente.</div>
+        {% endif %}
+
+        {% if next %}
+          <div class="text-muted mb-2">
+            {% if user.is_authenticated %}
+              Tu cuenta no tiene acceso a esta página.
+            {% else %}
+              Por favor, inicia sesión para continuar.
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'login' %}">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="id_username" class="form-label">Usuario</label>
+            {{ form.username }}
+          </div>
+          <div class="mb-3">
+            <label for="id_password" class="form-label">Contraseña</label>
+            {{ form.password }}
+          </div>
+          <input type="hidden" name="next" value="{{ next|default:'/actividades/' }}" />
+          <button type="submit" class="btn btn-primary w-100">Entrar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

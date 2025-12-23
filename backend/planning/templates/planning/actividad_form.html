@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · CRE{% endblock %}
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h1 class="h4 mb-3">{{ title }}</h1>
+
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+          {% endif %}
+
+          <form method="post" novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="id_unidad_programa" class="form-label">Unidad del Programa</label>
+              {{ form.unidad_programa }}
+              {% if form.unidad_programa.help_text %}
+                <div class="form-text">{{ form.unidad_programa.help_text }}</div>
+              {% endif %}
+              {{ form.unidad_programa.errors }}
+            </div>
+
+            <div class="mb-3">
+              <label for="id_tipo_actividad" class="form-label">Tipo de Actividad</label>
+              {{ form.tipo_actividad }}
+              {% if form.tipo_actividad.help_text %}
+                <div class="form-text">{{ form.tipo_actividad.help_text }}</div>
+              {% endif %}
+              {{ form.tipo_actividad.errors }}
+            </div>
+
+            <div class="mb-3">
+              <label for="id_descripcion" class="form-label">Descripción</label>
+              {{ form.descripcion }}
+              {% if form.descripcion.help_text %}
+                <div class="form-text">{{ form.descripcion.help_text }}</div>
+              {% endif %}
+              {{ form.descripcion.errors }}
+            </div>
+
+            <div class="mb-3">
+              <label for="id_horas" class="form-label">Horas</label>
+              {{ form.horas }}
+              {% if form.horas.help_text %}
+                <div class="form-text">{{ form.horas.help_text }}</div>
+              {% endif %}
+              {{ form.horas.errors }}
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i> Guardar
+              </button>
+              <a class="btn btn-outline-secondary" href="{% url 'actividades' %}">
+                <i class="bi bi-x-circle"></i> Cancelar
+              </a>
+            </div>
+
+            {% if form.unidad_programa.field.queryset.count == 0 %}
+              <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle"></i>
+                No hay unidades disponibles. <a href="{% url 'dashboard_ec' %}">Crea un programa y unidades</a> primero.
+              </div>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
