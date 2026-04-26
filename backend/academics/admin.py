@@ -2,7 +2,15 @@ from django.contrib import admin
 
 
 # from .models import ...
-from .models import UnidadAcademica, ConfiguracionCRE, Carrera, PlanEstudio, EspacioCurricular, PlanEstudioEC
+from .models import (
+    UnidadAcademica,
+    ConfiguracionCRE,
+    Carrera,
+    PlanEstudio,
+    EspacioCurricular,
+    PlanEstudioEC,
+    Competencia,
+)
 # Register your models here.
 
 @admin.register(UnidadAcademica)
@@ -19,6 +27,14 @@ class CarreraAdmin(admin.ModelAdmin):
 @admin.register(ConfiguracionCRE)
 class ConfiguracionCREAdmin(admin.ModelAdmin):
     list_display = ('horas_por_cre', 'actualizado_en')
+    
+    def has_add_permission(self, request):
+        # Only allow one instance (singleton)
+        return not ConfiguracionCRE.objects.exists()
+    
+    def has_delete_permission(self, request, obj=None):
+        # Don't allow deletion of the configuration
+        return False
     
 @admin.register(PlanEstudio)
 class PlanEstudioAdmin(admin.ModelAdmin):
@@ -38,3 +54,10 @@ class EspacioCurricularAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'codigo', 'creditos')
     search_fields = ('nombre', 'codigo')
     inlines = [PlanEstudioECInline]
+
+
+@admin.register(Competencia)
+class CompetenciaAdmin(admin.ModelAdmin):
+    list_display = ("codigo", "nombre", "plan_estudio", "activo")
+    list_filter = ("plan_estudio", "activo")
+    search_fields = ("codigo", "nombre")

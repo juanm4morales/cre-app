@@ -6,6 +6,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 class ConfiguracionCRE(models.Model):
     """
     Model that represents the configuration settings for CRE (Curricular Required Experience).
+    Singleton pattern: only one instance should exist.
     """
     horas_por_cre = models.PositiveIntegerField(
         default=settings.DEFAULT_CRE_HOURS,
@@ -20,12 +21,28 @@ class ConfiguracionCRE(models.Model):
     def __str__(self):
         return f"{self.horas_por_cre} horas por CRE"
     
+    def save(self, *args, **kwargs):
+        """Ensure singleton: delete other instances on save."""
+        if ConfiguracionCRE.objects.exists() and not self.pk:
+            self.pk = ConfiguracionCRE.objects.first().pk
+        super().save(*args, **kwargs)
+    
     @classmethod
     def get_hours_per_cre(cls) -> int:
+        """Get configured hours per CRE or fallback to default."""
         config = cls.objects.first()
         if config:
             return config.horas_por_cre
         return settings.DEFAULT_CRE_HOURS
+    
+    @classmethod
+    def get_instance(cls):
+        """Get or create the singleton instance."""
+        config, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={'horas_por_cre': settings.DEFAULT_CRE_HOURS}
+        )
+        return config
 
 class UnidadAcademica(models.Model):
     """
@@ -197,10 +214,12 @@ class EspacioCurricular(models.Model):
     
     codigo = models.CharField(
         max_length=20,
+        unique=True,
+        db_index=True,
         help_text="Código único para identificar el espacio curricular"
     )
     
-    nombre = models.CharField(max_length=255)
+    nombre = models.CharField(max_length=255, db_index=True)
     
     tipo_espacio = models.CharField(
         max_length=3,
@@ -248,3 +267,51 @@ class EspacioCurricular(models.Model):
         Calculate the total hours for the curricular space.
         """
         return self.horas_ip + self.horas_ta
+
+
+class Competencia(models.Model):
+    """Competencia definida en un plan de estudio."""
+
+    plan_estudio = models.ForeignKey(
+        PlanEstudio,
+        on_delete=models.PROTECT,
+        related_name="competencias",
+        help_text="Plan de estudio al que pertenece la competencia",
+    )
+
+    codigo = models.CharField(
+        max_length=50,
+        help_text="Codigo identificador de la competencia dentro del plan",
+    )
+
+    nombre = models.CharField(
+        max_length=255,
+        help_text="Nombre de la competencia",
+    )
+
+    descripcion = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Descripcion detallada de la competencia",
+    )
+
+    activo = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Indica si la competencia esta activa (baja logica)",
+    )
+
+    class Meta:
+        verbose_name = "competencia"
+        verbose_name_plural = "competencias"
+        db_table = "competencia"
+        ordering = ["plan_estudio_id", "codigo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["plan_estudio", "codigo"],
+                name="unique_competencia_plan_codigo",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
