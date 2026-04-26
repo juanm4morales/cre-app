@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=Spectral:wght@500;600;700&display=swap');
+
+:root {
+  color-scheme: light;
+  font-family: 'Source Sans 3', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --ink: #173042;
+  --muted: #61707f;
+  --surface: #f1f3ef;
+  --panel: #fcfcfa;
+  --panel-strong: #f0f2eb;
+  --sidebar-surface: #eef1e7;
+  --accent: #1f5d72;
+  --accent-bright: #2f7690;
+  --accent-warm: #a57a2a;
+  --border: #d6ddd2;
+  --shadow: 0 20px 40px rgba(23, 48, 66, 0.08);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 8% 10%, rgba(31, 93, 114, 0.12), transparent 34%),
+    radial-gradient(circle at 92% 10%, rgba(165, 122, 42, 0.1), transparent 28%),
+    linear-gradient(145deg, #f7f7f2 0%, #eef1eb 52%, #e7ece7 100%);
+  color: var(--ink);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+#root {
+  min-height: 100vh;
+}

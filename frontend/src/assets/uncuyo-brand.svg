@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180" fill="none">
+  <rect width="640" height="180" fill="transparent"/>
+  <g transform="translate(6 6)">
+    <circle cx="78" cy="84" r="72" stroke="#111111" stroke-width="4" fill="white"/>
+    <circle cx="78" cy="84" r="58" stroke="#111111" stroke-width="2.2" fill="none"/>
+    <path d="M78 41c10 0 19 7 22 16c-7-3-15-5-22-5s-15 2-22 5c3-9 12-16 22-16Z" fill="#111111"/>
+    <path d="M57 70h42v34c0 14-10 25-21 31c-11-6-21-17-21-31V70Z" stroke="#111111" stroke-width="2.5" fill="none"/>
+    <path d="M64 78h28v18H64z" stroke="#111111" stroke-width="2" fill="none"/>
+    <path d="M78 78v18M64 87h28" stroke="#111111" stroke-width="1.6"/>
+    <path d="M54 118c14 11 42 11 56 0" stroke="#111111" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+    <defs>
+      <path id="topArc" d="M20 84a58 58 0 0 1 116 0"/>
+      <path id="bottomArc" d="M136 84a58 58 0 0 1-116 0"/>
+    </defs>
+    <text font-family="Georgia, 'Times New Roman', serif" font-size="11" letter-spacing="1.7" fill="#111111">
+      <textPath href="#topArc" startOffset="50%" text-anchor="middle">UNIVERSIDAD NACIONAL</textPath>
+    </text>
+    <text font-family="Georgia, 'Times New Roman', serif" font-size="11" letter-spacing="1.5" fill="#111111">
+      <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">DE CUYO</textPath>
+    </text>
+  </g>
+  <g transform="translate(176 28)" fill="#111111">
+    <text x="0" y="48" font-family="Georgia, 'Times New Roman', serif" font-size="70" font-weight="700" letter-spacing="1.5">UNCUYO</text>
+    <text x="2" y="88" font-family="Georgia, 'Times New Roman', serif" font-size="24" font-weight="700" letter-spacing="1.8">UNIVERSIDAD</text>
+    <text x="2" y="118" font-family="Georgia, 'Times New Roman', serif" font-size="24" font-weight="700" letter-spacing="1.8">NACIONAL DE CUYO</text>
+  </g>
+</svg>
