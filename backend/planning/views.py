@@ -1,24 +1,65 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
+from django.db.models import Sum, Q
+from django.utils import timezone
 
-from academics.models import EspacioCurricular, PlanEstudioEC
-from .models import Programa, UnidadPrograma, Actividad, AsignacionDocente
-from .forms import ActividadForm, ProgramaForm, UnidadProgramaForm
+from academics.models import ConfiguracionCRE, EspacioCurricular, PlanEstudioEC
+from .models import Programa, Actividad, AsignacionDocente
+from .forms import ActividadForm, ProgramaForm
+
+
+def _asignacion_docente_qs(user):
+    """Get active assignments for a user (currently valid)."""
+    return AsignacionDocente.objects.activas(fecha=timezone.now().date()).filter(docente=user)
+
+
+def _programa_accesible_qs(user, ec_id):
+    """Get programs accessible to user filtered by curricular space."""
+    return (
+        Programa.objects.filter(
+			activo=True,
+            plan_estudio_ec__espacio_curricular_id=ec_id,
+            plan_estudio_ec__espacio_curricular__asignaciones_docente__in=_asignacion_docente_qs(user),
+        )
+        .distinct()
+    )
+
+
+def _actividad_accesible_qs(user, ec_id):
+    """Get activities accessible to user filtered by curricular space."""
+    return (
+        Actividad.objects.filter(
+			activo=True,
+            programa__plan_estudio_ec__espacio_curricular_id=ec_id,
+			programa__activo=True,
+            programa__plan_estudio_ec__espacio_curricular__asignaciones_docente__in=_asignacion_docente_qs(user),
+        )
+        .distinct()
+    )
+
+
+def _is_admin_user(user) -> bool:
+    """
+    Determina si un usuario tiene permisos de administración.
+
+    Retorna True si: superuser, is_staff, o perfil tiene role ADMIN.
+    Retorna False si no existe perfil (falso negativo, pero seguro).
+    """
+    if user.is_superuser or user.is_staff:
+        return True
+    profile = getattr(user, "profile", None)
+    return bool(profile and getattr(profile, "role", None) == "ADMIN")
 
 @login_required
 def seleccionar_espacio_curricular(request):
 	"""
-	Vista para que el docente seleccione el espacio curricular con el que quiere trabajar.
-	Muestra solo los espacios curriculares asignados al docente.
+	Vista para seleccionar primero la Carrera y luego el Espacio Curricular
+	asignado al docente.
 	"""
-	# Obtener los espacios curriculares asignados al docente
-	asignaciones = AsignacionDocente.objects.filter(
-		docente=request.user,
-		activo=True
-	).select_related('espacio_curricular')
+	# Get currently active assignments
+	asignaciones = _asignacion_docente_qs(request.user).select_related('espacio_curricular')
 
 	if not asignaciones.exists():
 		return render(
@@ -27,28 +68,44 @@ def seleccionar_espacio_curricular(request):
 			{'user_name': request.user.get_full_name() or request.user.get_username()},
 		)
 
-	# Si solo hay una asignación, redirigir directamente
-	if asignaciones.count() == 1:
-		asignacion = asignaciones.first()
-		request.session['espacio_curricular_id'] = asignacion.espacio_curricular.id
-		request.session['plan_estudio_ec_id'] = asignacion.espacio_curricular.planes_estudio.first().id
-		return redirect('dashboard_ec')
+	# Obtener los PlanEstudioEC asociados a los espacios curriculares asignados
+	plan_ec_qs = (
+		PlanEstudioEC.objects
+		.filter(espacio_curricular_id__in=asignaciones.values_list('espacio_curricular_id', flat=True))
+		.select_related('plan_estudio__carrera', 'espacio_curricular')
+		.order_by('plan_estudio__carrera__nombre', 'espacio_curricular__nombre')
+	)
+
+	# Carreras únicas disponibles para el docente
+	carreras = sorted({pec.plan_estudio.carrera for pec in plan_ec_qs}, key=lambda c: c.nombre)
 
 	if request.method == 'POST':
-		ec_id = request.POST.get('espacio_curricular_id')
-		if ec_id:
-			request.session['espacio_curricular_id'] = int(ec_id)
-			# Obtener el plan_estudio_ec para este espacio curricular
-			plan_ec = PlanEstudioEC.objects.filter(espacio_curricular_id=ec_id).first()
-			if plan_ec:
+		carrera_id = request.POST.get('carrera_id')
+		plan_ec_id = request.POST.get('plan_estudio_ec_id')
+
+		if not carrera_id or not plan_ec_id:
+			messages.error(request, "Selecciona una carrera y un espacio curricular.")
+		else:
+			plan_ec = PlanEstudioEC.objects.filter(
+				id=plan_ec_id,
+				plan_estudio__carrera_id=carrera_id,
+				espacio_curricular_id__in=asignaciones.values_list('espacio_curricular_id', flat=True),
+			).select_related('plan_estudio__carrera').first()
+
+			if not plan_ec:
+				messages.error(request, "La combinación de carrera y espacio curricular no es válida.")
+			else:
+				request.session['carrera_id'] = plan_ec.plan_estudio.carrera_id
+				request.session['espacio_curricular_id'] = plan_ec.espacio_curricular_id
 				request.session['plan_estudio_ec_id'] = plan_ec.id
-			return redirect('dashboard_ec')
+				return redirect('dashboard_ec')
 
 	return render(
 		request,
 		'planning/seleccionar_ec.html',
 		{
-			'asignaciones': asignaciones,
+			'carreras': carreras,
+			'plan_ec_list': plan_ec_qs,
 			'user_name': request.user.get_full_name() or request.user.get_username(),
 		},
 	)
@@ -56,7 +113,7 @@ def seleccionar_espacio_curricular(request):
 @login_required
 def dashboard_ec(request):
 	"""
-	Dashboard principal donde el docente gestiona Programas, Unidades y Actividades
+	Dashboard principal donde el docente gestiona Programas y Actividades
 	del Espacio Curricular seleccionado.
 	"""
 	ec_id = request.session.get('espacio_curricular_id')
@@ -74,8 +131,21 @@ def dashboard_ec(request):
 
 	# Obtener programas para este espacio curricular
 	programas = Programa.objects.filter(
-		plan_estudio_ec=plan_estudio_ec
-	).prefetch_related('unidades')
+		plan_estudio_ec=plan_estudio_ec,
+		activo=True,
+	).prefetch_related('actividades').annotate(
+		total_horas=models.Sum('actividades__horas', filter=Q(actividades__activo=True))
+	)
+
+	allowed_total_horas = (
+		plan_estudio_ec.espacio_curricular.creditos * ConfiguracionCRE.get_hours_per_cre()
+	)
+	
+	if _is_admin_user(request.user):
+		for programa in programas:
+			programa.total_horas = programa.total_horas or 0
+			programa.horas_diff = programa.total_horas - allowed_total_horas
+			programa.horas_diff_abs = abs(programa.horas_diff)
 
 	return render(
 		request,
@@ -83,6 +153,8 @@ def dashboard_ec(request):
 		{
 			'plan_estudio_ec': plan_estudio_ec,
 			'programas': programas,
+			'allowed_total_horas': allowed_total_horas,
+			'is_admin': _is_admin_user(request.user),
 			'user_name': request.user.get_full_name() or request.user.get_username(),
 		},
 	)
@@ -95,7 +167,7 @@ def programa_crear(request):
 		return redirect('seleccionar_ec')
 
 	if request.method == 'POST':
-		form = ProgramaForm(request.POST)
+		form = ProgramaForm(request.POST, plan_estudio_ec_id=plan_ec_id)
 		if form.is_valid():
 			programa = form.save(commit=False)
 			programa.plan_estudio_ec_id = plan_ec_id
@@ -103,7 +175,7 @@ def programa_crear(request):
 			messages.success(request, f"Programa {programa.anio_academico} creado exitosamente.")
 			return redirect('dashboard_ec')
 	else:
-		form = ProgramaForm()
+		form = ProgramaForm(plan_estudio_ec_id=plan_ec_id)
 
 	return render(
 		request,
@@ -117,7 +189,11 @@ def programa_crear(request):
 @login_required
 def programa_editar(request, pk: int):
 	"""Editar un programa existente."""
-	programa = get_object_or_404(Programa, pk=pk)
+	ec_id = request.session.get('espacio_curricular_id')
+	if not ec_id:
+		return redirect('seleccionar_ec')
+
+	programa = get_object_or_404(_programa_accesible_qs(request.user, ec_id), pk=pk)
 
 	if request.method == 'POST':
 		form = ProgramaForm(request.POST, instance=programa)
@@ -141,70 +217,17 @@ def programa_editar(request, pk: int):
 @require_http_methods(["POST"])
 def programa_eliminar(request, pk: int):
 	"""Eliminar un programa."""
-	programa = get_object_or_404(Programa, pk=pk)
+	ec_id = request.session.get('espacio_curricular_id')
+	if not ec_id:
+		return redirect('seleccionar_ec')
+
+	programa = get_object_or_404(_programa_accesible_qs(request.user, ec_id), pk=pk)
 	anio = programa.anio_academico
-	programa.delete()
-	messages.warning(request, f"Programa {anio} eliminado.")
-	return redirect('dashboard_ec')
-
-@login_required
-def unidad_crear(request, programa_id: int):
-	"""Crear una nueva unidad en un programa."""
-	programa = get_object_or_404(Programa, pk=programa_id)
-	
-	if request.method == 'POST':
-		form = UnidadProgramaForm(request.POST)
-		if form.is_valid():
-			unidad = form.save(commit=False)
-			unidad.programa = programa
-			unidad.save()
-			messages.success(request, f"Unidad {unidad.numero} creada exitosamente.")
-			return redirect('dashboard_ec')
-	else:
-		form = UnidadProgramaForm()
-
-	return render(
-		request,
-		'planning/unidad_form.html',
-		{
-			'title': 'Nueva Unidad',
-			'form': form,
-			'programa': programa,
-		},
-	)
-
-@login_required
-def unidad_editar(request, pk: int):
-	"""Editar una unidad existente."""
-	unidad = get_object_or_404(UnidadPrograma, pk=pk)
-
-	if request.method == 'POST':
-		form = UnidadProgramaForm(request.POST, instance=unidad)
-		if form.is_valid():
-			form.save()
-			messages.success(request, f"Unidad actualizada exitosamente.")
-			return redirect('dashboard_ec')
-	else:
-		form = UnidadProgramaForm(instance=unidad)
-
-	return render(
-		request,
-		'planning/unidad_form.html',
-		{
-			'title': f'Editar Unidad {unidad.numero}',
-			'form': form,
-			'programa': unidad.programa,
-		},
-	)
-
-@login_required
-@require_http_methods(["POST"])
-def unidad_eliminar(request, pk: int):
-	"""Eliminar una unidad."""
-	unidad = get_object_or_404(UnidadPrograma, pk=pk)
-	numero = unidad.numero
-	unidad.delete()
-	messages.warning(request, f"Unidad {numero} eliminada.")
+	programa.activo = False
+	programa.save(update_fields=['activo'])
+	programa.actividades.update(activo=False)
+	programa.unidades.update(activo=False)
+	messages.warning(request, f"Programa {anio} dado de baja.")
 	return redirect('dashboard_ec')
 
 @login_required
@@ -218,13 +241,12 @@ def actividades_usuario(request):
 		return redirect('seleccionar_ec')
 
 	actividades = (
-		Actividad.objects
-		.filter(unidad_programa__programa__plan_estudio_ec__espacio_curricular_id=ec_id)
+		_actividad_accesible_qs(request.user, ec_id)
 		.select_related(
-			'unidad_programa__programa',
+			'programa',
 			'tipo_actividad',
 		)
-		.order_by('unidad_programa__programa__anio_academico', 'unidad_programa__numero')
+		.order_by('programa__anio_academico', 'descripcion')
 	)
 
 	user_name = request.user.get_full_name() or request.user.get_username()
@@ -245,14 +267,17 @@ def actividad_crear(request):
 	if not ec_id:
 		return redirect('seleccionar_ec')
 
+	# Obtener programa_id del query string si está presente
+	programa_id = request.GET.get('programa')
+
 	if request.method == 'POST':
-		form = ActividadForm(request.POST, user=request.user, ec_id=ec_id)
+		form = ActividadForm(request.POST, user=request.user, ec_id=ec_id, programa_id=programa_id)
 		if form.is_valid():
 			form.save()
 			messages.success(request, "Actividad creada exitosamente.")
-			return redirect('actividades')
+			return redirect('dashboard_ec')
 	else:
-		form = ActividadForm(user=request.user, ec_id=ec_id)
+		form = ActividadForm(user=request.user, ec_id=ec_id, programa_id=programa_id)
 
 	return render(
 		request,
@@ -266,8 +291,11 @@ def actividad_crear(request):
 @login_required
 def actividad_editar(request, pk: int):
 	"""Editar una actividad existente del usuario actual."""
-	actividad = get_object_or_404(Actividad, pk=pk)
 	ec_id = request.session.get('espacio_curricular_id')
+	if not ec_id:
+		return redirect('seleccionar_ec')
+
+	actividad = get_object_or_404(_actividad_accesible_qs(request.user, ec_id), pk=pk)
 
 	if request.method == 'POST':
 		form = ActividadForm(request.POST, instance=actividad, user=request.user, ec_id=ec_id)
@@ -291,34 +319,13 @@ def actividad_editar(request, pk: int):
 @require_http_methods(["POST"])
 def actividad_eliminar(request, pk: int):
 	"""Eliminar una actividad."""
-	actividad = get_object_or_404(Actividad, pk=pk)
+	ec_id = request.session.get('espacio_curricular_id')
+	if not ec_id:
+		return redirect('seleccionar_ec')
+
+	actividad = get_object_or_404(_actividad_accesible_qs(request.user, ec_id), pk=pk)
 	descripcion = actividad.descripcion
-	actividad.delete()
-	messages.warning(request, f"Actividad '{descripcion}' eliminada.")
+	actividad.activo = False
+	actividad.save(update_fields=['activo'])
+	messages.warning(request, f"Actividad '{descripcion}' dada de baja.")
 	return redirect('actividades')
-
-@login_required
-def actividad_crear_programa(request, programa_id: int):
-	"""Crear una actividad filtrando unidades por el programa dado."""
-	programa = get_object_or_404(Programa, pk=programa_id)
-	ec_id = programa.plan_estudio_ec.espacio_curricular_id
-
-	if request.method == 'POST':
-		form = ActividadForm(request.POST, user=request.user, ec_id=ec_id, programa_id=programa.id)
-		if form.is_valid():
-			form.save()
-			messages.success(request, "Actividad creada exitosamente.")
-			if 'add_another' in request.POST:
-				return redirect('actividad_crear_programa', programa_id=programa.id)
-			return redirect('dashboard_ec')
-	else:
-		form = ActividadForm(user=request.user, ec_id=ec_id, programa_id=programa.id)
-
-	return render(
-		request,
-		'planning/actividad_form.html',
-		{
-			'title': f'Nueva actividad · Programa {programa.anio_academico}',
-			'form': form,
-		},
-	)
