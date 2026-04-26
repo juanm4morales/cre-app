@@ -63,6 +63,10 @@ cd backend
 python manage.py test
 ```
 
+## Tunelizacion
+
+Para compartir la app por internet usando Cloudflare Tunnel en entorno de desarrollo, ver [README_TUNELIZACION.md](/home/juanm4/Dev/cre-app/README_TUNELIZACION.md).
+
 ## Estructura
 
 - Backend Django en `backend/` con apps: `accounts`, `academics`, `planning`.

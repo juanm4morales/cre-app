@@ -17,6 +17,10 @@ staticfiles/
 .env
 .env.*
 
+.agents
+
+.github
+
 # VS Code
 .vscode/
 
