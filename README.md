@@ -26,14 +26,65 @@ Dependencias: ver [requirements.txt](/home/juanm4/Dev/cre-app/requirements.txt)
 
 3. Variables de entorno:
    - El backend lee `.env` desde [`config.settings`](./backend/config/settings.py). Mantener fuera del control de versiones.
+   - Crear `backend/.env` a partir de `backend/.env.example`.
    - Ejemplo de variables (no usar credenciales reales):
      ```
      POSTGRES_DB=creapp_db
      POSTGRES_USER=creapp_admin
      POSTGRES_PASSWORD=<cambiar>
      POSTGRES_HOST=localhost
-     POSTGRES_PORT=5432
+      POSTGRES_PORT=5432
+      ```
+
+## Clonar en otra PC (misma base de datos)
+
+Si queres mover una copia consistente de datos entre PCs, usa dump/restore:
+
+1. En la PC origen, exportar:
+   ```sh
+   ./scripts/db-export.sh
+   ```
+   Esto genera un archivo `backup_creapp_YYYYMMDD_HHMMSS.dump` en la raiz del repo.
+
+2. Copiar ese `.dump` a la otra PC.
+
+3. En la PC destino:
+   - Configurar `backend/.env` con la DB local de destino.
+   - Restaurar:
+     ```sh
+     ./scripts/db-import.sh /ruta/al/backup_creapp_YYYYMMDD_HHMMSS.dump
      ```
+
+4. Ejecutar migraciones por seguridad:
+   ```sh
+   cd backend
+   python manage.py migrate
+   ```
+
+## Compartir una DB en vivo a otra PC (LAN)
+
+Si queres que otra PC use tu misma DB en tiempo real:
+
+1. En la PC que hospeda PostgreSQL:
+   - Habilitar escucha remota (`listen_addresses='*'`) en `postgresql.conf`.
+   - Agregar regla en `pg_hba.conf` para la IP cliente.
+   - Abrir firewall solo para el puerto `5432` y solo a IPs confiables.
+
+2. En la PC cliente, en `backend/.env`:
+   ```env
+   POSTGRES_HOST=<IP_PC_HOST_DB>
+   POSTGRES_PORT=5432
+   POSTGRES_DB=creapp_db
+   POSTGRES_USER=creapp_admin
+   POSTGRES_PASSWORD=<password>
+   ```
+
+3. Para abrir frontend/backend desde otra maquina, completar tambien:
+   ```env
+   ALLOWED_HOSTS=localhost,127.0.0.1,<IP_BACKEND>,<HOSTNAME>
+   CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://<IP_FRONTEND>:5173
+   CSRF_TRUSTED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://<IP_FRONTEND>:5173
+   ```
 
 ## Base de datos con Docker
 
