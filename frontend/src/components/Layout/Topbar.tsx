@@ -22,6 +22,14 @@ interface PlanEstudioEC {
   espacio_curricular: number;
 }
 
+interface PaginatedResponse<T> {
+  results: T[];
+}
+
+function isPaginatedResponse<T>(value: unknown): value is PaginatedResponse<T> {
+  return typeof value === 'object' && value !== null && 'results' in value && Array.isArray((value as PaginatedResponse<T>).results);
+}
+
 const ROUTE_LABELS: Record<string, string> = {
   '/docente/resumen': 'Inicio',
   '/docente/espacios': 'Selección de espacio',
@@ -48,19 +56,19 @@ const DOCENTE_REFRESH_PATHS = ['/docente/planificacion-ip', '/docente/planificac
 
 function getCurrentSectionLabel(pathname: string): string {
   if (pathname.startsWith('/docente/planificacion-ip')) {
-    return ROUTE_LABELS['/docente/planificacion-ip'];
+    return ROUTE_LABELS['/docente/planificacion-ip'] ?? 'Sección';
   }
 
   if (pathname.startsWith('/docente/planificacion-ta')) {
-    return ROUTE_LABELS['/docente/planificacion-ta'];
+    return ROUTE_LABELS['/docente/planificacion-ta'] ?? 'Sección';
   }
 
   if (pathname.startsWith('/docente/agenda-cursado') || pathname.startsWith('/docente/dias-cursado')) {
-    return ROUTE_LABELS['/docente/agenda-cursado'];
+    return ROUTE_LABELS['/docente/agenda-cursado'] ?? 'Sección';
   }
 
   if (pathname.startsWith('/docente/ejecucion-ip')) {
-    return ROUTE_LABELS['/docente/ejecucion-ip'];
+    return ROUTE_LABELS['/docente/ejecucion-ip'] ?? 'Sección';
   }
 
   return ROUTE_LABELS[pathname] || 'Sección';
@@ -89,13 +97,15 @@ function Topbar({ role }: TopbarProps) {
     const loadEspacios = async () => {
       try {
         const [espaciosRes, planEcsRes] = await Promise.all([
-          api.get<EspacioCurricular[]>('/espacios-asignados'),
+          api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados'),
           api.get<{ results: PlanEstudioEC[] }>('/planes-estudio-ec'),
         ]);
 
         const espaciosData = Array.isArray(espaciosRes.data)
           ? espaciosRes.data
-          : espaciosRes.data.results || [];
+          : isPaginatedResponse<EspacioCurricular>(espaciosRes.data)
+            ? espaciosRes.data.results
+            : [];
         const relationMap = new Map<number, number>();
 
         (planEcsRes.data.results || []).forEach((planEc) => {

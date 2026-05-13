@@ -24,6 +24,10 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
+function isPaginatedResponse<T>(value: unknown): value is PaginatedResponse<T> {
+  return typeof value === 'object' && value !== null && 'results' in value && Array.isArray((value as PaginatedResponse<T>).results);
+}
+
 export default function DocenteEspacios() {
   const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
   const [planEcs, setPlanEcs] = useState<Map<number, number>>(new Map());
@@ -37,13 +41,15 @@ export default function DocenteEspacios() {
 
     try {
       const [espaciosRes, planEcsRes] = await Promise.all([
-        api.get<EspacioCurricular[]>('/espacios-asignados'),
+        api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados'),
         api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec'),
       ]);
 
       const espaciosData = Array.isArray(espaciosRes.data)
         ? espaciosRes.data
-        : espaciosRes.data.results || [];
+        : isPaginatedResponse<EspacioCurricular>(espaciosRes.data)
+          ? espaciosRes.data.results
+          : [];
 
       setEspacios(espaciosData);
 
