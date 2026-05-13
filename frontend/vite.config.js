@@ -36,6 +36,31 @@ function tunnelBasicAuthPlugin(username, password) {
   }
 }
 
+/**
+ * Vite proxy rule factory with CSRF-safe origin override.
+ *
+ * When tunneling (trycloudflare, Codespaces, etc.), the browser sends an
+ * Origin header (e.g. https://xxxxx.trycloudflare.com) that Django won't
+ * recognize. This sets Origin to the Vite dev server origin, which is
+ * already trusted by default in CSRF_TRUSTED_ORIGINS, while still letting
+ * Django validate the actual CSRF token (cookie vs X-CSRFToken header).
+ *
+ * The proxy is a local, trusted component — this does NOT bypass CSRF
+ * protection; it just makes the origin check pass for tunneled requests.
+ */
+function proxyTarget(target) {
+  return {
+    target,
+    changeOrigin: true,
+    secure: false,
+    configure: (proxy) => {
+      proxy.on('proxyReq', (proxyReq) => {
+        proxyReq.setHeader('Origin', 'http://localhost:5173');
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -48,26 +73,10 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       allowedHosts: ['.trycloudflare.com'],
       proxy: {
-        '/api': {
-          target: 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/admin': {
-          target: 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/accounts': {
-          target: 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/static': {
-          target: 'http://localhost:8000',
-          changeOrigin: true,
-          secure: false,
-        },
+        '/api': proxyTarget('http://localhost:8000'),
+        '/admin': proxyTarget('http://localhost:8000'),
+        '/accounts': proxyTarget('http://localhost:8000'),
+        '/static': proxyTarget('http://localhost:8000'),
       },
     },
   }
