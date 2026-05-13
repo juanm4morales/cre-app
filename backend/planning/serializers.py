@@ -18,7 +18,11 @@ from .models import (
 
 
 def _docente_asignado(user, espacio_curricular_id):
-    """Check if user has an active assignment to the curricular space."""
+    """Check if user has an active assignment to the curricular space.
+    Admin users bypass the check (they can create/edit for any space)."""
+    profile = getattr(user, "profile", None)
+    if profile and profile.role == "ADMIN":
+        return True
     return (
         AsignacionDocente.objects.activas(fecha=timezone.now().date())
         .filter(docente=user, espacio_curricular_id=espacio_curricular_id)
@@ -67,6 +71,7 @@ class UnidadCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Unidad
         fields = [
+            "id",
             "programa",
             "numero",
             "descripcion",
@@ -90,7 +95,7 @@ class UnidadUpdateSerializer(serializers.ModelSerializer):
 class ProgramaCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["plan_estudio_ec", "anio_academico", "descripcion"]
+        fields = ["id", "plan_estudio_ec", "anio_academico", "descripcion"]
 
     def validate_plan_estudio_ec(self, value: PlanEstudioEC):
         request = self.context.get("request")
@@ -153,6 +158,7 @@ class ActividadCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Actividad
         fields = [
+            "id",
             "programa",
             "tipo_actividad",
             "descripcion",

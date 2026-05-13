@@ -4,9 +4,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from openpyxl import Workbook
 
 from academics.models import (
@@ -18,6 +19,7 @@ from academics.models import (
     UnidadAcademica,
 )
 from .models import (
+    Actividad,
     ActividadAjuste,
     AsignacionDocente,
     ClaseCalendario,
@@ -533,4 +535,486 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
             )
 
         self.assertEqual(TipoActividad.objects.count(), 0)
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  INTEGRATION TESTS — Full flow docente + admin, scoping, CRUD
+# ═══════════════════════════════════════════════════════════════════
+
+class PlanningFullFlowIntegrationTest(TestCase):
+    """
+    Full API integration flow for a docente:
+    espacios → create_programa → unidades → dias-clase → calendario → actividades
+    Plus admin access, scoping, soft-delete cascade, competencias, ajustes.
+    """
+
+    def setUp(self):
+        self.client = Client(enforce_csrf_checks=True)
+        self.today = timezone.now().date()
+        self.current_year = self.today.year
+
+        # === Users ===
+        self.admin_user = get_user_model().objects.create_user(
+            username="admin_plan",
+            password="AdminPass1!",
+            is_staff=True,
+        )
+        self.admin_user.profile.role = "ADMIN"
+        self.admin_user.profile.save()
+
+        self.docente = get_user_model().objects.create_user(
+            username="docente_plan",
+            password="DocentePass1!",
+            first_name="Docente",
+            last_name="Plan",
+        )
+
+        # === Academic structure ===
+        self.unidad = UnidadAcademica.objects.create(
+            nombre="Facultad Test", sigla="FT"
+        )
+        self.carrera = Carrera.objects.create(
+            nombre="Ingeniería QA",
+            codigo="IQA",
+            nivel=Carrera.DegreeLevel.GRADO,
+            unidad_academica=self.unidad,
+        )
+        self.plan = PlanEstudio.objects.create(
+            carrera=self.carrera,
+            nombre="Plan QA 2026",
+            ordenanza="ORD-QA",
+            creditos=200,
+            vigente_desde=date(2026, 1, 1),
+        )
+        self.espacio = EspacioCurricular.objects.create(
+            nombre="Matematica QA",
+            codigo="MATQA",
+            tipo_espacio=EspacioCurricular.TipoEspacio.T1_ASIGNATURAS,
+            anio_cursada=1,
+            periodo=EspacioCurricular.Periodo.ANUAL,
+            creditos=6,
+            horas_ip=45,
+            horas_ta=105,
+        )
+        self.plan_ec = PlanEstudioEC.objects.create(
+            plan_estudio=self.plan,
+            espacio_curricular=self.espacio,
+        )
+
+        # === A second EC (for scoping tests) ===
+        self.otro_espacio = EspacioCurricular.objects.create(
+            nombre="Fisica QA",
+            codigo="FISQA",
+            tipo_espacio=EspacioCurricular.TipoEspacio.T1_ASIGNATURAS,
+            anio_cursada=1,
+            periodo=EspacioCurricular.Periodo.ANUAL,
+            creditos=6,
+            horas_ip=45,
+            horas_ta=105,
+        )
+        self.otro_plan = PlanEstudio.objects.create(
+            carrera=self.carrera,
+            nombre="Plan FIS QA",
+            ordenanza="ORD-FIS",
+            creditos=180,
+            vigente_desde=date(2026, 1, 1),
+        )
+        self.otro_plan_ec = PlanEstudioEC.objects.create(
+            plan_estudio=self.otro_plan,
+            espacio_curricular=self.otro_espacio,
+        )
+
+        # === AsignacionDocente (active now) ===
+        self.asignacion = AsignacionDocente.objects.create(
+            docente=self.docente,
+            espacio_curricular=self.espacio,
+            categoria=AsignacionDocente.Categoria.TITULAR,
+            vigente_desde=self.today - timezone.timedelta(days=30),
+            vigente_hasta=self.today + timezone.timedelta(days=300),
+        )
+
+        # === TipoActividad ===
+        self.tipo_ip = TipoActividad.objects.create(
+            nombre="Clase teorica QA",
+            tipo_dedicacion=TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA,
+        )
+        self.tipo_ta = TipoActividad.objects.create(
+            nombre="TP QA",
+            tipo_dedicacion=TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO,
+        )
+
+        # === Competencias ===
+        self.competencia = Competencia.objects.create(
+            plan_estudio=self.plan,
+            codigo="C-QA-01",
+            nombre="Competencia QA 1",
+        )
+
+    # ── helpers ──
+
+    def _login(self, username: str, password: str):
+        csrf_resp = self.client.get("/api/auth/csrf")
+        token = csrf_resp.cookies["csrftoken"].value
+        self.client.post(
+            "/api/auth/login",
+            {"username": username, "password": password},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+
+    def _csrf(self) -> str:
+        resp = self.client.get("/api/auth/csrf")
+        return resp.cookies["csrftoken"].value
+
+    # ── Tests ──
+
+    # ──────── 1. Docente full CRUD flow ────────
+
+    def test_01_docente_full_flow_create_program_unidades_actividades(self):
+        """Docente full flow: espacios → create programa → unidades → actividades"""
+        self._login("docente_plan", "DocentePass1!")
+
+        # 1a. GET /api/espacios-asignados → assigned ECs
+        resp = self.client.get("/api/espacios-asignados")
+        self.assertEqual(resp.status_code, 200)
+        ec_names = [ec["nombre"] for ec in resp.json()]
+        self.assertIn("Matematica QA", ec_names)
+        self.assertNotIn("Fisica QA", ec_names)
+
+        # 1b. POST create_programa_if_needed
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/espacios-asignados/create_programa_if_needed",
+            {"plan_estudio_ec_id": self.plan_ec.id},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertIn(resp.status_code, (200, 201), resp.json())
+        programa_id = resp.json()["id"]
+
+        # 1c. GET /api/programas → verify scoped by plan_ec
+        resp = self.client.get(f"/api/programas?plan_estudio_ec_id={self.plan_ec.id}")
+        self.assertEqual(resp.status_code, 200)
+        programa_ids = [p["id"] for p in resp.json()["results"]]
+        self.assertIn(programa_id, programa_ids)
+
+        # 1d. POST /api/unidades → create 2 units
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/unidades",
+            {
+                "programa": programa_id,
+                "numero": 1,
+                "descripcion": "Unidad 1 - Introduccion",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        unity_resp = resp.json()
+        self.assertEqual(resp.status_code, 201, f"Unidad 1 create failed: {unity_resp}")
+        unidad_1_id = unity_resp["id"]
+
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/unidades",
+            {
+                "programa": programa_id,
+                "numero": 2,
+                "descripcion": "Unidad 2 - Desarrollo",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        unity_resp = resp.json()
+        self.assertEqual(resp.status_code, 201, f"Unidad 2 create failed: {unity_resp}")
+        unidad_2_id = unity_resp["id"]
+
+        # 1e. POST /api/dias-clase → 2 weekly class blocks
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/dias-clase",
+            {
+                "programa": programa_id,
+                "dia_semana": 0,  # Monday
+                "hora_inicio": "08:00",
+                "hora_fin": "10:00",
+                "activo": True,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/dias-clase",
+            {
+                "programa": programa_id,
+                "dia_semana": 2,  # Wednesday
+                "hora_inicio": "08:00",
+                "hora_fin": "10:00",
+                "activo": True,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+
+        # 1f. POST /api/clases-calendario/generar-rango
+        token = self._csrf()
+        # Find a Monday in the current year
+        march_monday = date(self.current_year, 3, 2)
+        if march_monday.weekday() != 0:
+            march_monday = date(self.current_year, 3, 1)
+            while march_monday.weekday() != 0:
+                march_monday += timezone.timedelta(days=1)
+
+        resp = self.client.post(
+            "/api/clases-calendario/generar-rango",
+            {
+                "programa_id": programa_id,
+                "fecha_desde": march_monday.isoformat(),
+                "fecha_hasta": (march_monday + timezone.timedelta(days=14)).isoformat(),
+                "sobrescribir": False,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 200, resp.json())
+        # 2 weeks × 2 days/week = 4 classes (but some may be outside range)
+        self.assertGreaterEqual(resp.json()["created"], 2)
+
+        # Get a created class for IP actividad
+        clase = ClaseCalendario.objects.filter(programa_id=programa_id).first()
+        self.assertIsNotNone(clase)
+
+        # 1g. POST /api/actividades → create IP actividad (con clase)
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/actividades",
+            {
+                "programa": programa_id,
+                "tipo_actividad": self.tipo_ip.id,
+                "descripcion": "Clase teorica - Semana 1",
+                "horas": "2.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [unidad_1_id, unidad_2_id],
+                "clase_calendario": clase.id,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+        actividad_ip_id = resp.json()["id"]
+
+        # 1h. POST /api/actividades → create TA actividad (sin clase)
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/actividades",
+            {
+                "programa": programa_id,
+                "tipo_actividad": self.tipo_ta.id,
+                "descripcion": "TP - Resolver ejercicios",
+                "horas": "3.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [unidad_1_id],
+                "fecha_inicio_ta": march_monday.isoformat(),
+                "fecha_fin_ta": (march_monday + timezone.timedelta(days=7)).isoformat(),
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+        actividad_ta_id = resp.json()["id"]
+
+        # 1i. GET /api/actividades → verify both exist and scoped
+        resp = self.client.get(f"/api/actividades?programa_id={programa_id}")
+        self.assertEqual(resp.status_code, 200)
+        activity_ids = [a["id"] for a in resp.json()["results"]]
+        self.assertIn(actividad_ip_id, activity_ids)
+        self.assertIn(actividad_ta_id, activity_ids)
+
+        return programa_id, unidad_1_id, actividad_ip_id
+
+    # ──────── 2. Soft-delete cascade ────────
+
+    def test_02_soft_delete_programa_cascades_to_unidades_actividades(self):
+        """DELETE /api/programas/{id} sets activo=False on programa, unidades, actividades."""
+        programa_id, _, _ = self.test_01_docente_full_flow_create_program_unidades_actividades()
+
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+
+        resp = self.client.delete(
+            f"/api/programas/{programa_id}",
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 204)
+
+        # Verify cascade
+        programa = Programa.objects.get(id=programa_id)
+        self.assertFalse(programa.activo)
+        self.assertFalse(
+            Unidad.objects.filter(programa_id=programa_id, activo=True).exists()
+        )
+        self.assertFalse(
+            Actividad.objects.filter(programa_id=programa_id, activo=True).exists()
+        )
+
+    # ──────── 3. Scoping: docente cannot access otra EC ────────
+
+    def test_03_docente_scoping_blocks_other_ec(self):
+        """Docente cannot create program for unassigned EC."""
+        self._login("docente_plan", "DocentePass1!")
+        token = self._csrf()
+
+        # Try create_programa_if_needed for the OTHER space (not assigned)
+        resp = self.client.post(
+            "/api/espacios-asignados/create_programa_if_needed",
+            {"plan_estudio_ec_id": self.otro_plan_ec.id},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 403, resp.json())
+
+    def test_04_docente_cannot_see_other_ec_programs(self):
+        """Docente's GET /api/programas excludes otro EC's programs."""
+        # Admin creates a program for otro_espacio
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.otro_plan_ec.id,
+                "anio_academico": self.current_year,
+                "descripcion": "Programa Fisica",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+        otro_programa_id = resp.json()["id"]
+
+        # Now login as docente
+        self._login("docente_plan", "DocentePass1!")
+        resp = self.client.get("/api/programas")
+        self.assertEqual(resp.status_code, 200)
+        programa_ids = [p["id"] for p in resp.json()["results"]]
+        self.assertNotIn(otro_programa_id, programa_ids)
+
+    # ──────── 4. Admin access ────────
+
+    def test_05_admin_sees_all_espacios_asignados(self):
+        """Admin GET /api/espacios-asignados returns ALL ECs, not just assigned."""
+        self._login("admin_plan", "AdminPass1!")
+        resp = self.client.get("/api/espacios-asignados")
+        self.assertEqual(resp.status_code, 200)
+        ec_names = [ec["nombre"] for ec in resp.json()]
+        self.assertIn("Matematica QA", ec_names)
+        self.assertIn("Fisica QA", ec_names)
+
+    # ──────── 5. TipoActividad endpoint (permissions) ────────
+
+    def test_06_tipo_actividad_read_allowed_authenticated(self):
+        """Authenticated user can GET /api/tipos-actividad."""
+        self._login("docente_plan", "DocentePass1!")
+        resp = self.client.get("/api/tipos-actividad")
+        self.assertEqual(resp.status_code, 200)
+        names = [t["nombre"] for t in resp.json()["results"]]
+        self.assertIn("Clase teorica QA", names)
+
+    def test_07_tipo_actividad_create_requires_admin(self):
+        """Docente cannot POST /api/tipos-actividad."""
+        self._login("docente_plan", "DocentePass1!")
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/tipos-actividad",
+            {"nombre": "Hack", "tipo_dedicacion": "IP"},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    # ──────── 6. Competencia assignment via API ────────
+
+    def test_08_assign_competencias_to_unidad(self):
+        """POST /api/unidades/{id}/competencias assigns competencias."""
+        programa_id, unidad_1_id, _ = self.test_01_docente_full_flow_create_program_unidades_actividades()
+
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+        resp = self.client.post(
+            f"/api/unidades/{unidad_1_id}/competencias",
+            {"competencia_ids": [self.competencia.id]},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 200, resp.json())
+
+        # Verify
+        unidad = Unidad.objects.get(id=unidad_1_id)
+        self.assertTrue(unidad.competencias_rel.filter(competencia_id=self.competencia.id).exists())
+
+    # ──────── 7. Actividad ajustes ────────
+
+    def test_09_create_activity_adjustment(self):
+        """POST /api/actividades/{id}/ajustes creates EXTENSION."""
+        programa_id, _, actividad_ip_id = self.test_01_docente_full_flow_create_program_unidades_actividades()
+
+        self._login("admin_plan", "AdminPass1!")
+
+        # Get a calendar class from the same program for destino_clase
+        clase_destino = ClaseCalendario.objects.filter(programa_id=programa_id).first()
+        self.assertIsNotNone(clase_destino)
+
+        token = self._csrf()
+        resp = self.client.post(
+            f"/api/actividades/{actividad_ip_id}/ajustes",
+            {
+                "tipo": "EXT",
+                "motivo": "Tiempo insuficiente para cubrir el tema",
+                "horas_ip_extra": "1.00",
+                "clase_destino": clase_destino.id,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201, resp.json())
+
+        # Verify
+        ajustes_resp = self.client.get(f"/api/actividades/{actividad_ip_id}/ajustes")
+        self.assertEqual(ajustes_resp.status_code, 200)
+        self.assertEqual(len(ajustes_resp.json()), 1)
+
+    # ──────── 8. Scoping: docente cannot delete otra EC's records ────────
+
+    def test_10_docente_cannot_delete_other_ec_program(self):
+        """Docente DELETE on another EC's program returns 404 (scoped)."""
+        # Admin creates a program for otro_espacio
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+        resp = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.otro_plan_ec.id,
+                "anio_academico": self.current_year,
+                "descripcion": "Programa Fisica",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(resp.status_code, 201)
+        otro_programa_id = resp.json()["id"]
+
+        # Docente tries to delete it
+        self._login("docente_plan", "DocentePass1!")
+        token = self._csrf()
+        resp = self.client.delete(
+            f"/api/programas/{otro_programa_id}",
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        # 404 because scoped query excludes it → get_object raises Http404
+        self.assertEqual(resp.status_code, 404)
 
