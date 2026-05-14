@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import StatCard from '../../components/Common/StatCard';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface Programa {
   id: number;
@@ -16,6 +16,7 @@ interface Actividad {
   id: number;
   descripcion: string;
   horas: number;
+  programa?: number;
   tipo_actividad: {
     nombre: string;
     tipo_dedicacion: 'IP' | 'TA';
@@ -35,40 +36,26 @@ interface PaginatedResponse<T> {
 
 function AdminDashboard() {
   const currentYear = new Date().getFullYear();
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async (background = false) => {
-    if (!background) {
-      setLoading(true);
-    }
+  const { data: programas = [], isLoading: loadingProgramas } = useQuery({
+    queryKey: ['programas'],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas').then(res => res.data.results),
+  });
 
-    try {
-      const [programaRes, actividadRes, usuarioRes] = await Promise.all([
-        api.get<PaginatedResponse<Programa>>('/programas'),
-        api.get<PaginatedResponse<Actividad>>('/actividades'),
-        api.get<PaginatedResponse<Usuario>>('/usuarios'),
-      ]);
-      setProgramas(programaRes.data.results);
-      setActividades(actividadRes.data.results);
-      setUsuarios(usuarioRes.data.results);
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, []);
+  const { data: actividades = [], isLoading: loadingActividades } = useQuery({
+    queryKey: ['actividades'],
+    queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades').then(res => res.data.results),
+  });
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const { data: usuarios = [], isLoading: loadingUsuarios } = useQuery({
+    queryKey: ['usuarios'],
+    queryFn: () => api.get<PaginatedResponse<Usuario>>('/usuarios').then(res => res.data.results),
+  });
 
-  useApiAutoRefresh(() => loadData(true), []);
+  const loading = loadingProgramas || loadingActividades || loadingUsuarios;
 
-  const programasActuales = programas.filter((p) => p.anio_academico === currentYear);
-  const docentesActivos = usuarios.filter((user) => user.role === 'docente' && user.is_active).length;
+  const programasActuales = useMemo(() => programas.filter((p) => p.anio_academico === currentYear), [programas, currentYear]);
+  const docentesActivos = useMemo(() => usuarios.filter((user) => user.role === 'docente' && user.is_active).length, [usuarios]);
   
   const actividadesIP = actividades.filter((a) => a.tipo_actividad?.tipo_dedicacion === 'IP').length;
   const actividadesTA = actividades.filter((a) => a.tipo_actividad?.tipo_dedicacion === 'TA').length;
@@ -107,7 +94,7 @@ function AdminDashboard() {
     cells: [
       programa.descripcion || `Programa ${programa.id}`,
       programa.anio_academico,
-      actividades.filter((a) => a.descripcion.includes(programa.descripcion || '')).length || 'N/A',
+      actividades.filter((a) => a.programa === programa.id).length || 'N/A',
       <span className="table-row-pill" key={`status-${programa.id}`}>Activo</span>,
     ],
   }));

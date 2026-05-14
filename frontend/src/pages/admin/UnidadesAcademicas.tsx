@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface UnidadAcademica {
   id: number;
@@ -15,19 +15,12 @@ interface PaginatedResponse<T> {
 }
 
 function AdminUnidadesAcademicas() {
-  const [unidades, setUnidades] = useState<UnidadAcademica[]>([]);
   const [selected, setSelected] = useState<UnidadAcademica | null>(null);
 
-  const loadUnidades = useCallback(async () => {
-    const response = await api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas');
-    setUnidades(response.data.results);
-  }, []);
-
-  useEffect(() => {
-    void loadUnidades();
-  }, [loadUnidades]);
-
-  useApiAutoRefresh(loadUnidades, []);
+  const { data: unidades = [] } = useQuery({
+    queryKey: ['unidades-academicas'],
+    queryFn: () => api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas').then(res => res.data.results),
+  });
 
   const rows = unidades.map((unidad) => ({
     id: String(unidad.id),
@@ -68,7 +61,7 @@ function AdminUnidadesAcademicas() {
               <div>{selected.nombre}</div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>

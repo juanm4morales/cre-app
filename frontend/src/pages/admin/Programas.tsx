@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface Programa {
   id: number;
@@ -16,19 +16,12 @@ interface PaginatedResponse<T> {
 }
 
 function AdminProgramas() {
-  const [programas, setProgramas] = useState<Programa[]>([]);
   const [selected, setSelected] = useState<Programa | null>(null);
 
-  const loadProgramas = useCallback(async () => {
-    const response = await api.get<PaginatedResponse<Programa>>('/programas');
-    setProgramas(response.data.results);
-  }, []);
-
-  useEffect(() => {
-    void loadProgramas();
-  }, [loadProgramas]);
-
-  useApiAutoRefresh(loadProgramas, []);
+  const { data: programas = [] } = useQuery({
+    queryKey: ['programas'],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas').then(res => res.data.results),
+  });
 
   const rows = programas.map((programa) => ({
     id: String(programa.id),
@@ -75,7 +68,7 @@ function AdminProgramas() {
               <div>{selected.plan_estudio_ec}</div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>

@@ -1,3 +1,5 @@
+import { Dialog, DialogPanel, DialogTitle, DialogBackdrop } from '@headlessui/react';
+
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
@@ -17,25 +19,26 @@ function ConfirmDialog({
   onConfirm,
   onClose,
 }: ConfirmDialogProps) {
-  if (!open) return null;
-
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal">
-        <div className="modal-header">
-          <h3>{title}</h3>
-        </div>
-        <p className="modal-body">{message}</p>
-        <div className="modal-actions">
-          <button className="button button-ghost" type="button" onClick={onClose}>
-            {cancelLabel}
-          </button>
-          <button className="button" type="button" onClick={onConfirm}>
-            {confirmLabel}
-          </button>
-        </div>
+    <Dialog open={open} onClose={onClose} className="relative z-50">
+      <DialogBackdrop className="modal-backdrop w-full" />
+      <div className="modal-backdrop" style={{ background: 'transparent' }}>
+        <DialogPanel className="modal">
+          <DialogTitle className="modal-header" as="div">
+            <h3>{title}</h3>
+          </DialogTitle>
+          <p className="modal-body">{message}</p>
+          <div className="modal-actions">
+            <button className="button button-ghost" type="button" onClick={onClose}>
+              {cancelLabel}
+            </button>
+            <button className="button" type="button" onClick={onConfirm}>
+              {confirmLabel}
+            </button>
+          </div>
+        </DialogPanel>
       </div>
-    </div>
+    </Dialog>
   );
 }
 

@@ -1,19 +1,45 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { getApiErrorMessage } from '../utils/errors';
 
-function LoginPage() {
-  const { login, loading } = useAuth();
-  const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
+const loginSchema = z.object({
+  username: z.string().min(1, 'El usuario es requerido'),
+  password: z.string().min(1, 'La contraseña es requerida'),
+});
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+type LoginFormValues = z.infer<typeof loginSchema>;
+
+function LoginPage() {
+  const { login, loading, isAuthenticated, role } = useAuth();
+  const navigate = useNavigate();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      username: '',
+      password: '',
+    },
+  });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate(role === 'admin' ? '/admin' : '/docente', { replace: true });
+    }
+  }, [isAuthenticated, role, navigate]);
+
+  const onSubmit = async (data: LoginFormValues) => {
     try {
-      const user = await login({ username: name || '', password });
+      const user = await login({ username: data.username, password: data.password });
       navigate(user.role === 'admin' ? '/admin' : '/docente');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo iniciar sesión. Verifica tus credenciales.'));
@@ -22,7 +48,12 @@ function LoginPage() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      >
         <img
           src="https://iconape.com/wp-content/png_logo_vector/universidad-nacional-de-cuyo-uncuyo-logo.png"
           alt="UNCuyo"
@@ -34,37 +65,53 @@ function LoginPage() {
           Accede para cargar programas, actividades y controlar los
           créditos.
         </p>
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label className="muted" htmlFor="username-input">Usuario</label>
-          <input
-            id="username-input"
-            className="input"
-            type="text"
-            placeholder="Usuario o email"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-          />
-          <label className="muted" htmlFor="password-input">Contraseña</label>
-          <input
-            id="password-input"
-            className="input"
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
+        <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
+          <div>
+            <label className="muted" htmlFor="username-input">Usuario</label>
+            <input
+              id="username-input"
+              className={`input ${errors.username ? 'input-error' : ''}`}
+              type="text"
+              placeholder="Usuario o email"
+              autoComplete="username"
+              aria-invalid={errors.username ? 'true' : 'false'}
+              aria-describedby={errors.username ? 'username-error' : undefined}
+              {...register('username')}
+            />
+            {errors.username && (
+              <span id="username-error" className="error-text" role="alert">
+                {errors.username.message}
+              </span>
+            )}
+          </div>
+          <div>
+            <label className="muted" htmlFor="password-input">Contraseña</label>
+            <input
+              id="password-input"
+              className={`input ${errors.password ? 'input-error' : ''}`}
+              type="password"
+              placeholder="Contraseña"
+              autoComplete="current-password"
+              aria-invalid={errors.password ? 'true' : 'false'}
+              aria-describedby={errors.password ? 'password-error' : undefined}
+              {...register('password')}
+            />
+            {errors.password && (
+              <span id="password-error" className="error-text" role="alert">
+                {errors.password.message}
+              </span>
+            )}
+          </div>
           <button className="button" type="submit" disabled={loading}>
             {loading ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
-        <div className="chip-grid" style={{ marginTop: '1.4rem' }}>
+        <div className="chip-grid mt-4">
           <span className="chip">Horas CRE centralizadas</span>
           <span className="chip">Alertas IP / TA</span>
-          <span className="chip">Exportables rapidos</span>
+          <span className="chip">Exportables rápidos</span>
         </div>
-      </div>
+        </motion.div>
     </div>
   );
 }

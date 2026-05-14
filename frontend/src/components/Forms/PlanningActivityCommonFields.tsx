@@ -81,14 +81,13 @@ function PlanningActivityCommonFields({
 
       <div className="form-field-full">
         <select
-          className="select"
+          className="select competencias-select min-h-90"
           multiple
           value={unidadIds.map(String)}
           onChange={(event) => {
             const selectedValues = Array.from(event.target.selectedOptions).map((option) => Number(option.value));
             onUnidadIdsChange(selectedValues);
           }}
-          style={{ minHeight: '90px' }}
         >
           {unidades.map((unidad) => (
             <option key={unidad.id} value={unidad.id}>
@@ -96,7 +95,7 @@ function PlanningActivityCommonFields({
             </option>
           ))}
         </select>
-        <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.3rem' }}>
+        <p className="muted text-sm mt-1">
           Mantén presionado Ctrl/Cmd para seleccionar múltiples unidades.
         </p>
       </div>

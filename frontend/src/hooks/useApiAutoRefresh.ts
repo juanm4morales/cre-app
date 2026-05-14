@@ -56,5 +56,6 @@ export function useApiAutoRefresh(
         clearTimeout(timeoutId);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, debounceMs, ...deps]);
 }

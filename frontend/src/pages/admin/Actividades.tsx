@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface Actividad {
   id: number;
@@ -27,27 +27,22 @@ interface PaginatedResponse<T> {
 }
 
 function AdminActividades() {
-  const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [tipos, setTipos] = useState<TipoActividad[]>([]);
   const [selected, setSelected] = useState<Actividad | null>(null);
 
-  const loadData = useCallback(async () => {
-    const [actividadRes, programaRes, tipoRes] = await Promise.all([
-      api.get<PaginatedResponse<Actividad>>('/actividades'),
-      api.get<PaginatedResponse<Programa>>('/programas'),
-      api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad'),
-    ]);
-    setActividades(actividadRes.data.results);
-    setProgramas(programaRes.data.results);
-    setTipos(tipoRes.data.results);
-  }, []);
+  const { data: actividades = [] } = useQuery({
+    queryKey: ['actividades'],
+    queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades').then(res => res.data.results),
+  });
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const { data: programas = [] } = useQuery({
+    queryKey: ['programas'],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas').then(res => res.data.results),
+  });
 
-  useApiAutoRefresh(loadData, []);
+  const { data: tipos = [] } = useQuery({
+    queryKey: ['tipos-actividad'],
+    queryFn: () => api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad').then(res => res.data.results),
+  });
 
   const programaLookup = useMemo(() => {
     const map = new Map<number, string>();
@@ -115,7 +110,7 @@ function AdminActividades() {
               <div>{selected.horas}h</div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>

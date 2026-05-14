@@ -1,6 +1,8 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import MobileNav from './MobileNav';
+import AnimatedPage from '../Common/AnimatedPage';
 
 interface DashboardLayoutProps {
   role: 'docente' | 'admin';
@@ -16,7 +18,9 @@ function DashboardLayout({ role }: DashboardLayoutProps) {
       <div className="app-main">
         <Topbar role={role} />
         <main className="app-content">
-          <Outlet />
+          <AnimatedPage>
+            <Outlet />
+          </AnimatedPage>
         </main>
         <footer className="app-footer" aria-label="Informacion de la aplicacion">
           <div className="app-footer-left">
@@ -30,6 +34,7 @@ function DashboardLayout({ role }: DashboardLayoutProps) {
           </div>
         </footer>
       </div>
+      <MobileNav role={role} />
     </div>
   );
 }

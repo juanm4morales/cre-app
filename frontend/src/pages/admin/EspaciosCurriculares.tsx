@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface EspacioCurricular {
   id: number;
@@ -19,19 +19,12 @@ interface PaginatedResponse<T> {
 }
 
 function AdminEspaciosCurriculares() {
-  const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
   const [selected, setSelected] = useState<EspacioCurricular | null>(null);
 
-  const loadEspacios = useCallback(async () => {
-    const response = await api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares');
-    setEspacios(response.data.results);
-  }, []);
-
-  useEffect(() => {
-    void loadEspacios();
-  }, [loadEspacios]);
-
-  useApiAutoRefresh(loadEspacios, []);
+  const { data: espacios = [] } = useQuery({
+    queryKey: ['espacios-curriculares'],
+    queryFn: () => api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares').then(res => res.data.results),
+  });
 
   const rows = espacios.map((espacio) => ({
     id: String(espacio.id),
@@ -95,7 +88,7 @@ function AdminEspaciosCurriculares() {
               <div>{selected.horas_ta}h</div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>

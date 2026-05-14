@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Eye, Edit, Trash2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
@@ -7,7 +11,19 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const programaSchema = z.object({
+  plan_estudio_ec: z.string().min(1, 'Selecciona un plan de estudio'),
+  anio_academico: z.number().min(2000, 'Año inválido'),
+  descripcion: z.string().optional(),
+});
+type ProgramaFormValues = z.infer<typeof programaSchema>;
+
+const unidadSchema = z.object({
+  numero: z.number().int().min(1, 'El número de unidad debe ser mayor a 0'),
+  descripcion: z.string().min(1, 'La descripción es requerida'),
+});
+type UnidadFormValues = z.infer<typeof unidadSchema>;
 
 interface Programa {
   id: number;
@@ -62,98 +78,69 @@ interface Competencia {
 function DocenteProgramas() {
   const currentYear = new Date().getFullYear();
   const navigate = useNavigate();
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [unidades, setUnidades] = useState<Unidad[]>([]);
-  const [competencias, setCompetencias] = useState<Competencia[]>([]);
+  const queryClient = useQueryClient();
   const [unidadCompetenciasDraft, setUnidadCompetenciasDraft] = useState<Record<number, number[]>>({});
-  const [planEcs, setPlanEcs] = useState<PlanEstudioEC[]>([]);
-  const [planes, setPlanes] = useState<PlanEstudio[]>([]);
-  const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [viewOnly, setViewOnly] = useState(false);
-  const [creatingPrograma, setCreatingPrograma] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id?: number }>({
     open: false,
   });
-  const [formState, setFormState] = useState({
-    plan_estudio_ec: '',
-    anio_academico: '',
-    descripcion: '',
-  });
-  const [unidadForm, setUnidadForm] = useState({
-    numero: '',
-    descripcion: '',
-  });
   const [editing, setEditing] = useState<Programa | null>(null);
+
+  const {
+    register: registerPrograma,
+    handleSubmit: handleSubmitPrograma,
+    formState: { errors: errorsPrograma },
+    reset: resetProgramaForm,
+  } = useForm<ProgramaFormValues>({
+    resolver: zodResolver(programaSchema),
+    defaultValues: {
+      plan_estudio_ec: '',
+      anio_academico: currentYear,
+      descripcion: '',
+    },
+  });
+
+  const {
+    register: registerUnidad,
+    handleSubmit: handleSubmitUnidad,
+    formState: { errors: errorsUnidad },
+    reset: resetUnidadForm,
+  } = useForm<UnidadFormValues>({
+    resolver: zodResolver(unidadSchema),
+    defaultValues: {
+      numero: 1,
+      descripcion: '',
+    },
+  });
 
   // Leer espacio curricular del sessionStorage
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
 
-  const loadData = async () => {
-    if (!selectedPlanEcId) return;
+  const { data: programas = [] } = useQuery({
+    queryKey: ['programas', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas', {
+      params: { plan_estudio_ec_id: selectedPlanEcId },
+    }).then(res => res.data.results),
+    enabled: !!selectedPlanEcId,
+  });
 
-    setLoading(true);
-    try {
-      const [programaRes, unidadRes, planEcRes, planRes, espacioRes] = await Promise.all([
-        api.get<PaginatedResponse<Programa>>('/programas', {
-          params: { plan_estudio_ec_id: selectedPlanEcId },
-        }),
-        api.get<PaginatedResponse<Unidad>>('/unidades', {
-          params: { plan_estudio_ec_id: selectedPlanEcId },
-        }),
-        api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec'),
-        api.get<PaginatedResponse<PlanEstudio>>('/planes-estudio'),
-        api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares'),
-      ]);
-      setProgramas(programaRes.data.results);
-      setUnidades(unidadRes.data.results);
-      setPlanEcs(planEcRes.data.results);
-      setPlanes(planRes.data.results);
-      setEspacios(espacioRes.data.results);
-
+  const { data: unidades = [] } = useQuery({
+    queryKey: ['unidades', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Unidad>>('/unidades', {
+      params: { plan_estudio_ec_id: selectedPlanEcId },
+    }).then(res => {
+      const data = res.data.results;
       const initialDraft: Record<number, number[]> = {};
-      unidadRes.data.results.forEach((unidad) => {
+      data.forEach((unidad) => {
         initialDraft[unidad.id] = unidad.competencias?.map((item) => item.competencia.id) || [];
       });
       setUnidadCompetenciasDraft(initialDraft);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudieron cargar los programas del espacio seleccionado.'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!selectedPlanEcId) {
-      setLoading(false);
-      return;
-    }
-
-    void loadData();
-  }, [selectedPlanEcId, navigate]);
-
-  useApiAutoRefresh(() => loadData(), [selectedPlanEcId]);
-
-  useEffect(() => {
-    const loadCompetencias = async () => {
-      if (!selectedPlanEcId || planEcs.length === 0) return;
-      const selectedPlanEc = planEcs.find((item) => item.id === Number(selectedPlanEcId));
-      if (!selectedPlanEc) return;
-
-      try {
-        const response = await api.get<PaginatedResponse<Competencia>>('/competencias', {
-          params: { plan_estudio_id: selectedPlanEc.plan_estudio },
-        });
-        setCompetencias(response.data.results);
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, 'No se pudieron cargar las competencias del plan.'));
-      }
-    };
-
-    loadCompetencias();
-  }, [selectedPlanEcId, planEcs]);
+      return data;
+    }),
+    enabled: !!selectedPlanEcId,
+  });
 
   const programaActual = useMemo(
     () => programas.find((programa) => programa.anio_academico === currentYear) || null,
@@ -166,6 +153,34 @@ function DocenteProgramas() {
       .filter((unidad) => unidad.programa === programaActual.id)
       .sort((a, b) => a.numero - b.numero);
   }, [unidades, programaActual]);
+
+  const { data: planEcs = [] } = useQuery({
+    queryKey: ['planes-estudio-ec'],
+    queryFn: () => api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec').then(res => res.data.results),
+    enabled: !!selectedPlanEcId,
+  });
+
+  const { data: planes = [] } = useQuery({
+    queryKey: ['planes-estudio'],
+    queryFn: () => api.get<PaginatedResponse<PlanEstudio>>('/planes-estudio').then(res => res.data.results),
+    enabled: !!selectedPlanEcId,
+  });
+
+  const { data: espacios = [] } = useQuery({
+    queryKey: ['espacios-curriculares'],
+    queryFn: () => api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares').then(res => res.data.results),
+    enabled: !!selectedPlanEcId,
+  });
+
+  const selectedPlanEc = useMemo(() => planEcs.find((item) => item.id === Number(selectedPlanEcId)), [planEcs, selectedPlanEcId]);
+
+  const { data: competencias = [] } = useQuery({
+    queryKey: ['competencias', selectedPlanEc?.plan_estudio],
+    queryFn: () => api.get<PaginatedResponse<Competencia>>('/competencias', {
+      params: { plan_estudio_id: selectedPlanEc?.plan_estudio },
+    }).then(res => res.data.results),
+    enabled: !!selectedPlanEc?.plan_estudio,
+  });
 
   const competenciasOrdenadas = useMemo(
     () => [...competencias].sort((a, b) => a.codigo.localeCompare(b.codigo)),
@@ -193,70 +208,66 @@ function DocenteProgramas() {
   };
 
   const resetForm = () => {
-    setFormState({ plan_estudio_ec: '', anio_academico: '', descripcion: '' });
+    resetProgramaForm({ plan_estudio_ec: '', anio_academico: currentYear, descripcion: '' });
     setEditing(null);
     setViewOnly(false);
     setShowForm(false);
   };
 
-  const handleCreateProgramaCurrentYear = async () => {
-    if (!selectedPlanEcId) return;
-    setCreatingPrograma(true);
-    try {
-      await api.post<Programa>('/espacios-asignados/create_programa_if_needed', {
-        plan_estudio_ec_id: Number(selectedPlanEcId),
-      });
-      await loadData();
+  const createProgramaMutation = useMutation({
+    mutationFn: () => api.post<Programa>('/espacios-asignados/create_programa_if_needed', {
+      plan_estudio_ec_id: Number(selectedPlanEcId),
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['programas'] });
       toast.success(`Programa ${currentYear} disponible para cargar actividades.`);
-    } catch (error) {
+    },
+    onError: (error) => {
       toast.error(getApiErrorMessage(error, 'No se pudo crear o verificar el programa actual.'));
-    } finally {
-      setCreatingPrograma(false);
-    }
+    },
+  });
+
+  const handleCreateProgramaCurrentYear = () => {
+    if (!selectedPlanEcId) return;
+    createProgramaMutation.mutate();
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const payload = {
-      plan_estudio_ec: Number(formState.plan_estudio_ec),
-      anio_academico: Number(formState.anio_academico),
-      descripcion: formState.descripcion,
-    };
-
-    if (editing) {
-      try {
-        const response = await api.patch<Programa>(`/programas/${editing.id}`, {
+  const saveProgramaMutation = useMutation({
+    mutationFn: (payload: { plan_estudio_ec: number; anio_academico: number; descripcion: string }) => {
+      if (editing) {
+        return api.patch<Programa>(`/programas/${editing.id}`, {
           anio_academico: payload.anio_academico,
           descripcion: payload.descripcion,
         });
-        setProgramas((prev) => prev.map((item) => (item.id === editing.id ? response.data : item)));
-        toast.success('Programa actualizado correctamente.');
-        resetForm();
-        return;
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, 'No se pudo actualizar el programa.'));
-        return;
       }
-    }
-
-    try {
-      const response = await api.post<Programa>('/programas', payload);
-      setProgramas((prev) => [response.data, ...prev]);
-      toast.success('Programa creado correctamente.');
+      return api.post<Programa>('/programas', payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['programas'] });
+      toast.success(editing ? 'Programa actualizado correctamente.' : 'Programa creado correctamente.');
       resetForm();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo crear el programa.'));
-    }
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, editing ? 'No se pudo actualizar el programa.' : 'No se pudo crear el programa.'));
+    },
+  });
+
+  const onSubmitPrograma = (data: ProgramaFormValues) => {
+    saveProgramaMutation.mutate({
+      plan_estudio_ec: Number(data.plan_estudio_ec),
+      anio_academico: Number(data.anio_academico),
+      descripcion: data.descripcion || '',
+    });
   };
 
   const handleEdit = (programa: Programa) => {
     setEditing(programa);
     setShowForm(true);
     setViewOnly(false);
-    setFormState({
+    resetProgramaForm({
       plan_estudio_ec: String(programa.plan_estudio_ec),
-      anio_academico: String(programa.anio_academico),
-      descripcion: programa.descripcion,
+      anio_academico: programa.anio_academico,
+      descripcion: programa.descripcion || '',
     });
   };
 
@@ -264,63 +275,76 @@ function DocenteProgramas() {
     setEditing(programa);
     setShowForm(true);
     setViewOnly(true);
-    setFormState({
+    resetProgramaForm({
       plan_estudio_ec: String(programa.plan_estudio_ec),
-      anio_academico: String(programa.anio_academico),
-      descripcion: programa.descripcion,
+      anio_academico: programa.anio_academico,
+      descripcion: programa.descripcion || '',
     });
   };
 
-  const handleDelete = async (programaId: number) => {
+  const deleteProgramaMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/programas/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['programas'] });
+      toast.success('Programa dado de baja correctamente.');
+      setDeleteConfirm({ open: false });
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'No se pudo dar de baja el programa.'));
+      setDeleteConfirm({ open: false });
+    },
+  });
+
+  const handleDelete = (programaId: number) => {
     setDeleteConfirm({ open: true, id: programaId });
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (!deleteConfirm.id) return;
-    try {
-      await api.delete(`/programas/${deleteConfirm.id}`);
-      setProgramas((prev) => prev.filter((item) => item.id !== deleteConfirm.id));
-      toast.success('Programa dado de baja correctamente.');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo dar de baja el programa.'));
-    } finally {
-      setDeleteConfirm({ open: false });
-    }
+    deleteProgramaMutation.mutate(deleteConfirm.id);
   };
 
-  const handleCreateUnidad = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const createUnidadMutation = useMutation({
+    mutationFn: (payload: { programa: number; numero: number; descripcion: string }) => api.post<Unidad>('/unidades', payload),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['unidades'] });
+      setUnidadCompetenciasDraft((prev) => ({ ...prev, [response.data.id]: [] }));
+      resetUnidadForm({ numero: 1, descripcion: '' });
+      toast.success('Unidad agregada al programa actual.');
+    },
+    onError: (error) => {
+      toast.error(getApiErrorMessage(error, 'No se pudo crear la unidad.'));
+    },
+  });
+
+  const onSubmitUnidad = (data: UnidadFormValues) => {
     if (!programaActual) {
       toast.error('Primero debes crear o actualizar el programa del año actual.');
       return;
     }
 
-    try {
-      const response = await api.post<Unidad>('/unidades', {
-        programa: programaActual.id,
-        numero: Number(unidadForm.numero),
-        descripcion: unidadForm.descripcion,
-      });
-      setUnidades((prev) => [...prev, response.data]);
-      setUnidadCompetenciasDraft((prev) => ({ ...prev, [response.data.id]: [] }));
-      setUnidadForm({ numero: '', descripcion: '' });
-      await loadData();
-      toast.success('Unidad agregada al programa actual.');
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo crear la unidad.'));
-    }
+    createUnidadMutation.mutate({
+      programa: programaActual.id,
+      numero: data.numero,
+      descripcion: data.descripcion,
+    });
   };
 
-  const handleSaveUnidadCompetencias = async (unidadId: number) => {
-    try {
-      const response = await api.post<Unidad>(`/unidades/${unidadId}/competencias`, {
-        competencia_ids: unidadCompetenciasDraft[unidadId] || [],
-      });
-      setUnidades((prev) => prev.map((unidad) => (unidad.id === unidadId ? response.data : unidad)));
+  const saveUnidadCompetenciasMutation = useMutation({
+    mutationFn: (unidadId: number) => api.post<Unidad>(`/unidades/${unidadId}/competencias`, {
+      competencia_ids: unidadCompetenciasDraft[unidadId] || [],
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['unidades'] });
       toast.success('Competencias de unidad actualizadas.');
-    } catch (error) {
+    },
+    onError: (error) => {
       toast.error(getApiErrorMessage(error, 'No se pudieron guardar las competencias de la unidad.'));
-    }
+    },
+  });
+
+  const handleSaveUnidadCompetencias = (unidadId: number) => {
+    saveUnidadCompetenciasMutation.mutate(unidadId);
   };
 
   const rows = programas.map((programa) => ({
@@ -378,7 +402,7 @@ function DocenteProgramas() {
             <h2>{viewOnly ? 'Detalle del programa' : editing ? 'Editar programa' : 'Nuevo programa'}</h2>
             <p>{selectedEspacioNombre || 'Programa'}</p>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex-row-gap">
             <button className="button button-ghost" type="button" onClick={resetForm}>
               Volver a la lista
             </button>
@@ -386,47 +410,54 @@ function DocenteProgramas() {
         </section>
 
         <SectionCard title={viewOnly ? 'Información del programa' : editing ? 'Datos del programa' : 'Crear nuevo programa'}>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <select
-              className="select"
-              value={formState.plan_estudio_ec}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, plan_estudio_ec: event.target.value }))
-              }
-              disabled={Boolean(editing) || viewOnly}
-              required
-            >
-              <option value="">Plan de estudio - Espacio curricular</option>
-              {planEcs.map((plan) => (
-                <option key={plan.id} value={plan.id}>
-                  {planEcLabel(plan.id)}
-                </option>
-              ))}
-            </select>
-            <input
-              className="input"
-              type="number"
-              placeholder="Año académico"
-              value={formState.anio_academico}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, anio_academico: event.target.value }))
-              }
-              disabled={viewOnly}
-              required
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Descripción"
-              value={formState.descripcion}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, descripcion: event.target.value }))
-              }
-              disabled={viewOnly}
-            />
+          <form className="form-grid" onSubmit={handleSubmitPrograma(onSubmitPrograma)}>
+            <div>
+              <select
+                className={`select ${errorsPrograma.plan_estudio_ec ? 'input-error' : ''}`}
+                disabled={Boolean(editing) || viewOnly}
+                aria-invalid={errorsPrograma.plan_estudio_ec ? 'true' : 'false'}
+                {...registerPrograma('plan_estudio_ec')}
+              >
+                <option value="">Plan de estudio - Espacio curricular</option>
+                {planEcs.map((plan) => (
+                  <option key={plan.id} value={plan.id}>
+                    {planEcLabel(plan.id)}
+                  </option>
+                ))}
+              </select>
+              {errorsPrograma.plan_estudio_ec && (
+                <span className="error-text" role="alert">{errorsPrograma.plan_estudio_ec.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errorsPrograma.anio_academico ? 'input-error' : ''}`}
+                type="number"
+                placeholder="Año académico"
+                disabled={viewOnly}
+                aria-invalid={errorsPrograma.anio_academico ? 'true' : 'false'}
+                {...registerPrograma('anio_academico', { valueAsNumber: true })}
+              />
+              {errorsPrograma.anio_academico && (
+                <span className="error-text" role="alert">{errorsPrograma.anio_academico.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errorsPrograma.descripcion ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Descripción"
+                disabled={viewOnly}
+                aria-invalid={errorsPrograma.descripcion ? 'true' : 'false'}
+                {...registerPrograma('descripcion')}
+              />
+              {errorsPrograma.descripcion && (
+                <span className="error-text" role="alert">{errorsPrograma.descripcion.message}</span>
+              )}
+            </div>
             <div className="form-actions">
               {!viewOnly ? (
-                <button className="button" type="submit" disabled={loading}>
+                <button className="button" type="submit" disabled={saveProgramaMutation.isPending}>
                   {editing ? 'Guardar cambios' : 'Crear programa'}
                 </button>
               ) : null}
@@ -440,39 +471,43 @@ function DocenteProgramas() {
         {editing && editing.anio_academico === currentYear ? (
           <SectionCard title="Unidades del programa">
             <>
-              <p className="muted" style={{ marginTop: 0 }}>
+              <p className="muted mt-0">
                 Para habilitar la carga de actividades, el programa actual debe tener al menos una unidad activa.
               </p>
-              <form className="form-grid" onSubmit={handleCreateUnidad}>
-                <input
-                  className="input"
-                  type="number"
-                  min={1}
-                  placeholder="Número de unidad"
-                  value={unidadForm.numero}
-                  onChange={(event) =>
-                    setUnidadForm((prev) => ({ ...prev, numero: event.target.value }))
-                  }
-                  required
-                />
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Descripción de unidad"
-                  value={unidadForm.descripcion}
-                  onChange={(event) =>
-                    setUnidadForm((prev) => ({ ...prev, descripcion: event.target.value }))
-                  }
-                  required
-                />
+              <form className="form-grid" onSubmit={handleSubmitUnidad(onSubmitUnidad)}>
+                <div>
+                  <input
+                    className={`input ${errorsUnidad.numero ? 'input-error' : ''}`}
+                    type="number"
+                    min={1}
+                    placeholder="Número de unidad"
+                    aria-invalid={errorsUnidad.numero ? 'true' : 'false'}
+                    {...registerUnidad('numero', { valueAsNumber: true })}
+                  />
+                  {errorsUnidad.numero && (
+                    <span className="error-text" role="alert">{errorsUnidad.numero.message}</span>
+                  )}
+                </div>
+                <div>
+                  <input
+                    className={`input ${errorsUnidad.descripcion ? 'input-error' : ''}`}
+                    type="text"
+                    placeholder="Descripción de unidad"
+                    aria-invalid={errorsUnidad.descripcion ? 'true' : 'false'}
+                    {...registerUnidad('descripcion')}
+                  />
+                  {errorsUnidad.descripcion && (
+                    <span className="error-text" role="alert">{errorsUnidad.descripcion.message}</span>
+                  )}
+                </div>
                 <div className="form-actions">
-                  <button className="button" type="submit">
+                  <button className="button" type="submit" disabled={createUnidadMutation.isPending}>
                     Agregar unidad
                   </button>
                 </div>
               </form>
 
-              <div className="unidades-competencias-grid" style={{ marginTop: '0.9rem' }}>
+              <div className="unidades-competencias-grid mt-2">
                 {unidades.filter((u) => u.programa === editing.id).length === 0 ? (
                   <span className="chip">Aún no hay unidades cargadas.</span>
                 ) : (
@@ -563,7 +598,7 @@ function DocenteProgramas() {
             Primero verifica el programa {currentYear}. Si está actualizado, podrás cargar actividades.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div className="flex-row-gap">
           {!programaActual ? (
             <button
               className="button button-ghost"
@@ -573,18 +608,18 @@ function DocenteProgramas() {
               Configurar agenda de cursado
             </button>
           ) : null}
-          {programaActual ? (
+          {!programaActual ? (
             <button
               className="button"
               type="button"
               onClick={handleCreateProgramaCurrentYear}
-              disabled={creatingPrograma}
+              disabled={createProgramaMutation.isPending}
             >
-              {creatingPrograma ? (
+              {createProgramaMutation.isPending ? (
                 <>Creando...</>
               ) : (
                 <>
-                  <Plus size={18} style={{ marginRight: '0.5rem' }} />
+                  <Plus size={18} className="mr-2" />
                   Crear programa {currentYear}
                 </>
               )}
@@ -626,8 +661,8 @@ function DocenteProgramas() {
           </div>
         ) : (
           <>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <p className="muted" style={{ marginTop: 0 }}>
+            <div className="mb-4">
+              <p className="muted mt-0">
                 <strong>Descripción:</strong> {programaActual.descripcion || 'Sin descripción'}
               </p>
               <p className="muted">
@@ -641,7 +676,7 @@ function DocenteProgramas() {
                 type="button"
                 onClick={() => handleEdit(programaActual)}
               >
-                <Edit size={18} style={{ marginRight: '0.5rem' }} />
+                <Edit size={18} className="mr-2" />
                 Editar programa y unidades
               </button>
             </div>

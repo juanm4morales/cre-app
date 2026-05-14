@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Eye, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
@@ -6,6 +9,15 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const tipoActividadSchema = z.object({
+  nombre: z.string().min(1, 'El nombre es requerido'),
+  tipo_dedicacion: z.string().optional(),
+  modalidad_trabajo: z.string().optional(),
+  descripcion: z.string().optional(),
+});
+
+type TipoActividadFormValues = z.infer<typeof tipoActividadSchema>;
 
 interface TipoActividad {
   id: number;
@@ -28,11 +40,20 @@ function AdminTiposActividad() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id?: number }>({
     open: false,
   });
-  const [formState, setFormState] = useState({
-    nombre: '',
-    descripcion: '',
-    tipo_dedicacion: '',
-    modalidad_trabajo: '',
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<TipoActividadFormValues>({
+    resolver: zodResolver(tipoActividadSchema),
+    defaultValues: {
+      nombre: '',
+      tipo_dedicacion: '',
+      modalidad_trabajo: '',
+      descripcion: '',
+    },
   });
 
   const loadTipos = useCallback(async (background = false) => {
@@ -57,29 +78,36 @@ function AdminTiposActividad() {
   useApiAutoRefresh(() => loadTipos(true), []);
 
   const resetForm = () => {
-    setFormState({ nombre: '', descripcion: '', tipo_dedicacion: '', modalidad_trabajo: '' });
+    reset({ nombre: '', descripcion: '', tipo_dedicacion: '', modalidad_trabajo: '' });
     setEditing(null);
     setShowForm(false);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const onSubmit = async (data: TipoActividadFormValues) => {
     if (editing) {
-      const response = await api.patch<TipoActividad>(`/tipos-actividad/${editing.id}`, formState);
-      setTipos((prev) => prev.map((item) => (item.id === editing.id ? response.data : item)));
-      resetForm();
+      try {
+        const response = await api.patch<TipoActividad>(`/tipos-actividad/${editing.id}`, data);
+        setTipos((prev) => prev.map((item) => (item.id === editing.id ? response.data : item)));
+        resetForm();
+      } catch {
+        toast.error('Error al actualizar el tipo de actividad');
+      }
       return;
     }
 
-    const response = await api.post<TipoActividad>('/tipos-actividad', formState);
-    setTipos((prev) => [response.data, ...prev]);
-    resetForm();
+    try {
+      const response = await api.post<TipoActividad>('/tipos-actividad', data);
+      setTipos((prev) => [response.data, ...prev]);
+      resetForm();
+    } catch {
+      toast.error('Error al crear el tipo de actividad');
+    }
   };
 
   const handleEdit = (tipo: TipoActividad) => {
     setEditing(tipo);
     setShowForm(true);
-    setFormState({
+    reset({
       nombre: tipo.nombre,
       descripcion: tipo.descripcion,
       tipo_dedicacion: tipo.tipo_dedicacion,
@@ -97,7 +125,7 @@ function AdminTiposActividad() {
       await api.delete(`/tipos-actividad/${deleteConfirm.id}`);
       setTipos((prev) => prev.filter((item) => item.id !== deleteConfirm.id));
       toast.success('Tipo de actividad eliminado');
-    } catch (error) {
+    } catch {
       toast.error('Error al eliminar el tipo de actividad');
     } finally {
       setDeleteConfirm({ open: false });
@@ -163,6 +191,7 @@ function AdminTiposActividad() {
           type="button"
           onClick={() => {
             setShowForm(true);
+            reset({ nombre: '', descripcion: '', tipo_dedicacion: '', modalidad_trabajo: '' });
             setEditing(null);
           }}
         >
@@ -172,42 +201,55 @@ function AdminTiposActividad() {
 
       {showForm ? (
         <SectionCard title={editing ? 'Editar tipo de actividad' : 'Nuevo tipo de actividad'}>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <input
-              className="input"
-              type="text"
-              placeholder="Nombre"
-              value={formState.nombre}
-              onChange={(event) => setFormState((prev) => ({ ...prev, nombre: event.target.value }))}
-              required
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Tipo de dedicacion"
-              value={formState.tipo_dedicacion}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, tipo_dedicacion: event.target.value }))
-              }
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Modalidad de trabajo"
-              value={formState.modalidad_trabajo}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, modalidad_trabajo: event.target.value }))
-              }
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Descripcion"
-              value={formState.descripcion}
-              onChange={(event) =>
-                setFormState((prev) => ({ ...prev, descripcion: event.target.value }))
-              }
-            />
+          <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
+            <div>
+              <input
+                className={`input ${errors.nombre ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Nombre"
+                aria-invalid={errors.nombre ? 'true' : 'false'}
+                {...register('nombre')}
+              />
+              {errors.nombre && (
+                <span className="error-text" role="alert">{errors.nombre.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.tipo_dedicacion ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Tipo de dedicación"
+                aria-invalid={errors.tipo_dedicacion ? 'true' : 'false'}
+                {...register('tipo_dedicacion')}
+              />
+              {errors.tipo_dedicacion && (
+                <span className="error-text" role="alert">{errors.tipo_dedicacion.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.modalidad_trabajo ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Modalidad de trabajo"
+                aria-invalid={errors.modalidad_trabajo ? 'true' : 'false'}
+                {...register('modalidad_trabajo')}
+              />
+              {errors.modalidad_trabajo && (
+                <span className="error-text" role="alert">{errors.modalidad_trabajo.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.descripcion ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Descripción"
+                aria-invalid={errors.descripcion ? 'true' : 'false'}
+                {...register('descripcion')}
+              />
+              {errors.descripcion && (
+                <span className="error-text" role="alert">{errors.descripcion.message}</span>
+              )}
+            </div>
             <div className="form-actions">
               <button className="button" type="submit" disabled={loading}>
                 {editing ? 'Guardar cambios' : 'Crear tipo'}

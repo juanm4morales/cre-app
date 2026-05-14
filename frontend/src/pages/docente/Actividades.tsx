@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
   AlertTriangle,
   CalendarDays,
@@ -18,6 +21,37 @@ import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
 import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const actividadSchema = z.object({
+  programa: z.string().min(1, 'El programa es requerido'),
+  tipo_actividad: z.string().optional(),
+  modalidad_trabajo: z.enum(['IND', 'EQU']),
+  unidad_ids: z.array(z.number()).min(1, 'Selecciona al menos una unidad para la actividad'),
+  descripcion: z.string().min(1, 'La descripción es requerida'),
+  minutos: z.number().min(0, 'Los minutos deben ser mayor o igual a 0'),
+  clase_calendario: z.string().optional(),
+  fecha_inicio_ta: z.string().optional(),
+  fecha_fin_ta: z.string().optional(),
+});
+
+type ActividadFormValues = z.infer<typeof actividadSchema>;
+
+const ajusteSchema = z.object({
+  tipo: z.enum(['REC', 'EXT']),
+  motivo: z.string().min(1, 'El motivo es requerido'),
+  horas_ip_extra: z.number().min(0),
+  fecha_evento: z.string().optional(),
+});
+
+type AjusteFormValues = z.infer<typeof ajusteSchema>;
+
+const extraClassSchema = z.object({
+  fecha: z.string().min(1, 'La fecha es requerida'),
+  estado: z.enum(['PLAN', 'DICT', 'CANC']),
+  observaciones: z.string().optional(),
+});
+
+type ExtraClassFormValues = z.infer<typeof extraClassSchema>;
 
 type WorkflowMode = 'PLAN' | 'EXEC';
 type ExecutionFilter = 'PENDIENTES_REGISTRAR' | 'HOY_ANTERIORES' | 'PENDIENTES' | 'TODAS' | 'INCIDENCIAS';
@@ -142,24 +176,63 @@ function DocenteActividades() {
     loading: false,
     history: [],
   });
-  const [adjustState, setAdjustState] = useState({
-    tipo: 'REC' as 'REC' | 'EXT',
-    motivo: '',
-    horas_ip_extra: '',
-    fecha_evento: '',
+  const {
+    register: registerAjuste,
+    handleSubmit: handleAjusteSubmit,
+    formState: { errors: errorsAjuste },
+    reset: resetAjuste,
+  } = useForm<AjusteFormValues>({
+    resolver: zodResolver(ajusteSchema),
+    defaultValues: {
+      tipo: 'REC',
+      motivo: '',
+      horas_ip_extra: 0,
+      fecha_evento: '',
+    },
   });
-  const [formState, setFormState] = useState({
-    programa: '',
-    tipo_actividad: '',
-    modalidad_trabajo: 'IND' as 'IND' | 'EQU',
-    unidad_ids: [] as number[],
-    descripcion: '',
-    minutos: '',
-    clase_calendario: '',
-    fecha_inicio_ta: '',
-    fecha_fin_ta: '',
+
+  const {
+    register: registerExtraClass,
+    handleSubmit: handleExtraClassSubmit,
+    formState: { errors: errorsExtraClass },
+    reset: resetExtraClass,
+    setValue: setExtraClassValue,
+  } = useForm<ExtraClassFormValues>({
+    resolver: zodResolver(extraClassSchema),
+    defaultValues: {
+      fecha: '',
+      estado: 'PLAN',
+      observaciones: '',
+    },
   });
+
   const [editing, setEditing] = useState<Actividad | null>(null);
+
+  const {
+    register: registerActividad,
+    handleSubmit: handleActividadSubmit,
+    formState: { errors: errorsActividad },
+    reset: resetActividadForm,
+    watch: watchActividad,
+    setValue: setActividadValue,
+  } = useForm<ActividadFormValues>({
+    resolver: zodResolver(actividadSchema),
+    defaultValues: {
+      programa: '',
+      tipo_actividad: '',
+      modalidad_trabajo: 'IND',
+      unidad_ids: [],
+      descripcion: '',
+      minutos: 0,
+      clase_calendario: '',
+      fecha_inicio_ta: '',
+      fecha_fin_ta: '',
+    },
+  });
+
+  const watchPrograma = watchActividad('programa');
+  const watchTipoActividad = watchActividad('tipo_actividad');
+
   const [calendarGenerateState, setCalendarGenerateState] = useState({
     fecha_desde: '',
     fecha_hasta: '',
@@ -168,12 +241,7 @@ function DocenteActividades() {
   });
   const [classNotesDraft, setClassNotesDraft] = useState<Record<number, string>>({});
   const [updatingClassId, setUpdatingClassId] = useState<number | null>(null);
-  const [extraClassForm, setExtraClassForm] = useState({
-    fecha: '',
-    estado: 'PLAN' as 'PLAN' | 'DICT' | 'CANC',
-    observaciones: '',
-    loading: false,
-  });
+  const [extraClassLoading, setExtraClassLoading] = useState(false);
 
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
@@ -250,16 +318,6 @@ function DocenteActividades() {
 
   useApiAutoRefresh(() => loadData(true), [selectedPlanEcId], { enabled: Boolean(selectedPlanEcId) });
 
-  if (!selectedPlanEcId) {
-    return (
-      <SectionCard title="Seleccion de espacio curricular">
-        <p className="muted">
-          Usa el desplegable superior para elegir un espacio curricular y continuar con la planificacion.
-        </p>
-      </SectionCard>
-    );
-  }
-
   const programaLookup = useMemo(() => {
     const map = new Map<number, string>();
     programas.forEach((programa) => map.set(programa.id, programa.descripcion || `Programa ${programa.id}`));
@@ -289,7 +347,7 @@ function DocenteActividades() {
     [programas, currentYear]
   );
 
-  const activeProgramId = Number(formState.programa || currentYearProgram?.id || 0);
+  const activeProgramId = Number(watchPrograma || currentYearProgram?.id || 0);
 
   const unidadesProgramaActivo = useMemo(
     () => unidades.filter((unidad) => unidad.programa === activeProgramId).sort((a, b) => a.numero - b.numero),
@@ -310,8 +368,8 @@ function DocenteActividades() {
   const firstTaType = useMemo(() => tipos.find((tipo) => tipo.tipo_dedicacion === 'TA') || null, [tipos]);
 
   const selectedType = useMemo(
-    () => tipos.find((tipo) => String(tipo.id) === formState.tipo_actividad) || null,
-    [tipos, formState.tipo_actividad]
+    () => tipos.find((tipo) => String(tipo.id) === watchTipoActividad) || null,
+    [tipos, watchTipoActividad]
   );
   const isIpForm = selectedType?.tipo_dedicacion === 'IP';
 
@@ -371,15 +429,14 @@ function DocenteActividades() {
   }, [classesSortedByDate]);
 
   useEffect(() => {
-    if (formState.programa || !currentYearProgram) {
+    if (watchPrograma || !currentYearProgram) {
       return;
     }
-    setFormState((prev) => ({
-      ...prev,
-      programa: String(currentYearProgram.id),
-      tipo_actividad: prev.tipo_actividad || String(firstTaType?.id || ''),
-    }));
-  }, [currentYearProgram, formState.programa, firstTaType]);
+    setActividadValue('programa', String(currentYearProgram.id));
+    if (!watchTipoActividad) {
+      setActividadValue('tipo_actividad', String(firstTaType?.id || ''));
+    }
+  }, [currentYearProgram, watchPrograma, watchTipoActividad, firstTaType, setActividadValue]);
 
   useEffect(() => {
     const monthStart = new Date(currentYear, calendarMonth, 1);
@@ -398,11 +455,8 @@ function DocenteActividades() {
 
   useEffect(() => {
     if (!currentYearProgram) return;
-    setExtraClassForm((prev) => {
-      if (prev.fecha) return prev;
-      return { ...prev, fecha: dateToIso(new Date()) };
-    });
-  }, [currentYearProgram]);
+    setExtraClassValue('fecha', dateToIso(new Date()));
+  }, [currentYearProgram, setExtraClassValue]);
 
   const refreshCalendarClasses = async () => {
     const classesResponse = await api.get<PaginatedResponse<ClaseCalendario>>('/clases-calendario', {
@@ -441,13 +495,13 @@ function DocenteActividades() {
   };
 
   const resetForm = () => {
-    setFormState({
+    resetActividadForm({
       programa: currentYearProgram ? String(currentYearProgram.id) : '',
       tipo_actividad: firstTaType ? String(firstTaType.id) : '',
       modalidad_trabajo: 'IND',
       unidad_ids: [],
       descripcion: '',
-      minutos: '',
+      minutos: 0,
       clase_calendario: '',
       fecha_inicio_ta: '',
       fecha_fin_ta: '',
@@ -458,39 +512,29 @@ function DocenteActividades() {
     setSelectedClassDate(null);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (formState.unidad_ids.length === 0) {
-      toast.error('Selecciona al menos una unidad para la actividad.');
-      return;
-    }
+  const onSubmitActividad = async (data: ActividadFormValues) => {
+    const minutos = Number(data.minutos);
 
-    const minutos = Number(formState.minutos);
-    if (!Number.isFinite(minutos) || minutos < 0) {
-      toast.error('Los minutos deben ser un numero valido mayor o igual a 0.');
-      return;
-    }
-
-    if (isIpForm && !formState.clase_calendario) {
+    if (isIpForm && !data.clase_calendario) {
       toast.error('Las actividades IP deben vincularse a una clase del calendario.');
       return;
     }
 
-    if (!isIpForm && formState.fecha_inicio_ta && formState.fecha_fin_ta && formState.fecha_inicio_ta > formState.fecha_fin_ta) {
+    if (!isIpForm && data.fecha_inicio_ta && data.fecha_fin_ta && data.fecha_inicio_ta > data.fecha_fin_ta) {
       toast.error('La fecha fin TA no puede ser anterior a la fecha inicio.');
       return;
     }
 
     const payload = {
-      programa: Number(formState.programa),
-      tipo_actividad: formState.tipo_actividad ? Number(formState.tipo_actividad) : undefined,
-      modalidad_trabajo: formState.modalidad_trabajo,
-      unidad_ids: formState.unidad_ids,
-      descripcion: formState.descripcion,
+      programa: Number(data.programa),
+      tipo_actividad: data.tipo_actividad ? Number(data.tipo_actividad) : undefined,
+      modalidad_trabajo: data.modalidad_trabajo,
+      unidad_ids: data.unidad_ids,
+      descripcion: data.descripcion,
       horas: Number((minutos / 60).toFixed(2)),
-      clase_calendario: isIpForm ? Number(formState.clase_calendario) : null,
-      fecha_inicio_ta: !isIpForm && formState.fecha_inicio_ta ? formState.fecha_inicio_ta : null,
-      fecha_fin_ta: !isIpForm && formState.fecha_fin_ta ? formState.fecha_fin_ta : null,
+      clase_calendario: isIpForm && data.clase_calendario ? Number(data.clase_calendario) : null,
+      fecha_inicio_ta: !isIpForm && data.fecha_inicio_ta ? data.fecha_inicio_ta : null,
+      fecha_fin_ta: !isIpForm && data.fecha_fin_ta ? data.fecha_fin_ta : null,
     };
 
     if (editing) {
@@ -549,25 +593,30 @@ function DocenteActividades() {
     setShowForm(true);
     setEditing(null);
     setViewOnly(false);
-    setFormState((prev) => ({
-      ...prev,
+    resetActividadForm({
       programa: String(currentYearProgram.id),
       tipo_actividad: String(firstIpType.id),
       clase_calendario: String(matchedClass.id),
-    }));
+      modalidad_trabajo: 'IND',
+      unidad_ids: [],
+      descripcion: '',
+      minutos: 0,
+      fecha_inicio_ta: '',
+      fecha_fin_ta: '',
+    });
   };
 
   const handleEdit = (actividad: Actividad) => {
     setEditing(actividad);
     setShowForm(true);
     setViewOnly(false);
-    setFormState({
+    resetActividadForm({
       programa: String(actividad.programa),
       tipo_actividad: String(actividad.tipo_actividad),
       modalidad_trabajo: actividad.modalidad_trabajo,
       unidad_ids: actividad.unidad_ids || [],
       descripcion: actividad.descripcion,
-      minutos: String(Math.round(Number(actividad.horas) * 60)),
+      minutos: Math.round(Number(actividad.horas) * 60),
       clase_calendario: actividad.clase_calendario ? String(actividad.clase_calendario) : '',
       fecha_inicio_ta: actividad.fecha_inicio_ta || '',
       fecha_fin_ta: actividad.fecha_fin_ta || '',
@@ -578,13 +627,13 @@ function DocenteActividades() {
     setEditing(actividad);
     setShowForm(true);
     setViewOnly(true);
-    setFormState({
+    resetActividadForm({
       programa: String(actividad.programa),
       tipo_actividad: String(actividad.tipo_actividad),
       modalidad_trabajo: actividad.modalidad_trabajo,
       unidad_ids: actividad.unidad_ids || [],
       descripcion: actividad.descripcion,
-      minutos: String(Math.round(Number(actividad.horas) * 60)),
+      minutos: Math.round(Number(actividad.horas) * 60),
       clase_calendario: actividad.clase_calendario ? String(actividad.clase_calendario) : '',
       fecha_inicio_ta: actividad.fecha_inicio_ta || '',
       fecha_fin_ta: actividad.fecha_fin_ta || '',
@@ -610,7 +659,7 @@ function DocenteActividades() {
 
   const openAdjustModal = async (actividad: Actividad) => {
     setAdjustModal({ open: true, actividad, loading: true, history: [] });
-    setAdjustState({ tipo: 'REC', motivo: '', horas_ip_extra: '', fecha_evento: '' });
+    resetAjuste({ tipo: 'REC', motivo: '', horas_ip_extra: 0, fecha_evento: '' });
     try {
       const response = await api.get<ActividadAjuste[]>(`/actividades/${actividad.id}/ajustes`);
       setAdjustModal({ open: true, actividad, loading: false, history: response.data });
@@ -620,18 +669,14 @@ function DocenteActividades() {
     }
   };
 
-  const handleCreateAdjust = async () => {
+  const handleAjusteSubmitAction = async (data: AjusteFormValues) => {
     if (!adjustModal.actividad) return;
-    if (!adjustState.motivo.trim()) {
-      toast.error('Debes indicar un motivo para registrar el ajuste.');
-      return;
-    }
 
     const payload = {
-      tipo: adjustState.tipo,
-      motivo: adjustState.motivo,
-      horas_ip_extra: Number(adjustState.horas_ip_extra || 0),
-      fecha_evento: adjustState.fecha_evento || null,
+      tipo: data.tipo,
+      motivo: data.motivo,
+      horas_ip_extra: data.horas_ip_extra,
+      fecha_evento: data.fecha_evento || null,
     };
 
     try {
@@ -643,7 +688,7 @@ function DocenteActividades() {
         ...prev,
         history: [response.data, ...prev.history],
       }));
-      setAdjustState({ tipo: 'REC', motivo: '', horas_ip_extra: '', fecha_evento: '' });
+      resetAjuste({ tipo: 'REC', motivo: '', horas_ip_extra: 0, fecha_evento: '' });
       setActividades((prev) =>
         prev.map((item) =>
           item.id === adjustModal.actividad?.id ? { ...item, tiene_ajustes: true } : item
@@ -686,36 +731,31 @@ function DocenteActividades() {
     }
   };
 
-  const handleCreateExtraClass = async () => {
+  const handleCreateExtraClassAction = async (data: ExtraClassFormValues) => {
     if (!currentYearProgram) {
       toast.error('Debes tener un programa activo para agregar una clase extra.');
       return;
     }
-    if (!extraClassForm.fecha) {
-      toast.error('Debes indicar una fecha para la clase extra.');
-      return;
-    }
 
-    setExtraClassForm((prev) => ({ ...prev, loading: true }));
+    setExtraClassLoading(true);
     try {
       const response = await api.post<ClaseCalendario>('/clases-calendario', {
         programa: currentYearProgram.id,
-        fecha: extraClassForm.fecha,
-        estado: extraClassForm.estado,
-        observaciones: extraClassForm.observaciones,
+        fecha: data.fecha,
+        estado: data.estado,
+        observaciones: data.observaciones,
       });
       setClases((prev) => [...prev, response.data]);
-      setExtraClassForm((prev) => ({
-        ...prev,
-        fecha: prev.fecha,
+      resetExtraClass({
+        fecha: data.fecha,
         estado: 'PLAN',
         observaciones: '',
-        loading: false,
-      }));
+      });
       toast.success('Clase extra agregada al calendario.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo crear la clase extra.'));
-      setExtraClassForm((prev) => ({ ...prev, loading: false }));
+    } finally {
+      setExtraClassLoading(false);
     }
   };
 
@@ -802,6 +842,16 @@ function DocenteActividades() {
     return ids;
   }, [diasClase, activeProgramId]);
 
+  if (!selectedPlanEcId) {
+    return (
+      <SectionCard title="Seleccion de espacio curricular">
+        <p className="muted">
+          Usa el desplegable superior para elegir un espacio curricular y continuar con la planificacion.
+        </p>
+      </SectionCard>
+    );
+  }
+
   if (loading) {
     return (
       <SectionCard title="Actividades">
@@ -829,55 +879,69 @@ function DocenteActividades() {
               <h3>Recuperar o extender actividad</h3>
             </div>
             <div className="modal-body">
-              <p style={{ marginTop: 0 }}>
+              <p className="mt-0">
                 Registra recuperaciones o extensiones por tiempo insuficiente. Esta bitacora queda en historial.
               </p>
-              <div className="form-grid">
-                <select
-                  className="select"
-                  value={adjustState.tipo}
-                  onChange={(event) =>
-                    setAdjustState((prev) => ({ ...prev, tipo: event.target.value as 'REC' | 'EXT' }))
-                  }
-                >
-                  <option value="REC">Recuperacion</option>
-                  <option value="EXT">Extension</option>
-                </select>
-                <input
-                  className="input"
-                  type="number"
-                  min={0}
-                  step={0.25}
-                  placeholder="Horas IP extra"
-                  value={adjustState.horas_ip_extra}
-                  onChange={(event) =>
-                    setAdjustState((prev) => ({ ...prev, horas_ip_extra: event.target.value }))
-                  }
-                />
-                <input
-                  className="input"
-                  type="date"
-                  value={adjustState.fecha_evento}
-                  onChange={(event) =>
-                    setAdjustState((prev) => ({ ...prev, fecha_evento: event.target.value }))
-                  }
-                />
-                <input
-                  className="input"
-                  type="text"
-                  placeholder="Motivo del ajuste"
-                  value={adjustState.motivo}
-                  onChange={(event) =>
-                    setAdjustState((prev) => ({ ...prev, motivo: event.target.value }))
-                  }
-                />
-              </div>
-              <div className="form-actions" style={{ marginTop: '0.8rem' }}>
-                <button className="button" type="button" onClick={handleCreateAdjust}>
-                  Registrar ajuste
-                </button>
-              </div>
-              <h4 style={{ marginBottom: '0.5rem' }}>Historial</h4>
+              <form onSubmit={handleAjusteSubmit(handleAjusteSubmitAction)}>
+                <div className="form-grid">
+                  <div>
+                    <select
+                      className={`select ${errorsAjuste.tipo ? 'input-error' : ''}`}
+                      aria-invalid={errorsAjuste.tipo ? 'true' : 'false'}
+                      {...registerAjuste('tipo')}
+                    >
+                      <option value="REC">Recuperacion</option>
+                      <option value="EXT">Extension</option>
+                    </select>
+                    {errorsAjuste.tipo && (
+                      <span className="error-text" role="alert">{errorsAjuste.tipo.message}</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      className={`input ${errorsAjuste.horas_ip_extra ? 'input-error' : ''}`}
+                      type="number"
+                      min={0}
+                      step={0.25}
+                      placeholder="Horas IP extra"
+                      aria-invalid={errorsAjuste.horas_ip_extra ? 'true' : 'false'}
+                      {...registerAjuste('horas_ip_extra', { valueAsNumber: true })}
+                    />
+                    {errorsAjuste.horas_ip_extra && (
+                      <span className="error-text" role="alert">{errorsAjuste.horas_ip_extra.message}</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      className={`input ${errorsAjuste.fecha_evento ? 'input-error' : ''}`}
+                      type="date"
+                      aria-invalid={errorsAjuste.fecha_evento ? 'true' : 'false'}
+                      {...registerAjuste('fecha_evento')}
+                    />
+                    {errorsAjuste.fecha_evento && (
+                      <span className="error-text" role="alert">{errorsAjuste.fecha_evento.message}</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      className={`input ${errorsAjuste.motivo ? 'input-error' : ''}`}
+                      type="text"
+                      placeholder="Motivo del ajuste"
+                      aria-invalid={errorsAjuste.motivo ? 'true' : 'false'}
+                      {...registerAjuste('motivo')}
+                    />
+                    {errorsAjuste.motivo && (
+                      <span className="error-text" role="alert">{errorsAjuste.motivo.message}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="form-actions mt-2" style={{ marginBottom: '1.5rem' }}>
+                  <button className="button" type="submit">
+                    Registrar ajuste
+                  </button>
+                </div>
+              </form>
+              <h4 className="mb-2">Historial</h4>
               {adjustModal.loading ? (
                 <p className="muted">Cargando historial...</p>
               ) : adjustModal.history.length === 0 ? (
@@ -940,7 +1004,7 @@ function DocenteActividades() {
           <p className="muted">
             Para crear actividades primero debes crear o actualizar el programa del anio actual y sus unidades.
           </p>
-          <div className="form-actions" style={{ marginTop: '0.8rem' }}>
+          <div className="form-actions mt-2">
             <button className="button" type="button" onClick={() => navigate('/docente/programas')}>
               Ir a programa actual
             </button>
@@ -953,7 +1017,7 @@ function DocenteActividades() {
               <p className="muted">
                 Este programa no tiene unidades activas. Para cargar actividades debes agregar al menos una unidad.
               </p>
-              <div className="form-actions" style={{ marginTop: '0.8rem' }}>
+              <div className="form-actions mt-2">
                 <button className="button" type="button" onClick={() => navigate('/docente/programas')}>
                   Ir a programas y agregar unidades
                 </button>
@@ -962,12 +1026,12 @@ function DocenteActividades() {
           ) : (
             <SectionCard title="Calendario de clases IP">
               {!firstIpType ? (
-                <div className="status-note status-note-warning" style={{ marginBottom: '0.8rem' }}>
+                <div className="status-note status-note-warning mb-2">
                   No hay tipos de actividad IP disponibles. Hasta que administración cargue al menos uno, no podrás crear actividades desde el calendario.
                 </div>
               ) : null}
 
-              <div className="planning-context-grid" style={{ marginBottom: '1rem' }}>
+              <div className="planning-context-grid mb-3">
                 <div className="context-card">
                   <span className="context-label">Programa activo</span>
                   <strong>{currentYearProgram?.descripcion || `Programa ${currentYear}`}</strong>
@@ -985,8 +1049,8 @@ function DocenteActividades() {
                 </div>
               </div>
 
-              <div className="form-row" style={{ marginBottom: '0.8rem' }}>
-                <label style={{ minWidth: '190px', display: 'grid', gap: '0.25rem' }}>
+              <div className="form-row mb-2">
+                <label className="grid-label">
                   <span className="muted">Desde</span>
                   <input
                     className="input"
@@ -997,7 +1061,7 @@ function DocenteActividades() {
                     }
                   />
                 </label>
-                <label style={{ minWidth: '190px', display: 'grid', gap: '0.25rem' }}>
+                <label className="grid-label">
                   <span className="muted">Hasta</span>
                   <input
                     className="input"
@@ -1008,7 +1072,7 @@ function DocenteActividades() {
                     }
                   />
                 </label>
-                <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <label className="muted flex-row gap-1">
                   <input
                     type="checkbox"
                     checked={calendarGenerateState.sobrescribir}
@@ -1083,7 +1147,7 @@ function DocenteActividades() {
             title="Actividades planificadas"
             action={
               <button className="button" type="button" onClick={openCreateForm}>
-                <Plus size={18} style={{ marginRight: '0.45rem' }} />
+                <Plus size={18} className="mr-2" />
                 Nueva actividad
               </button>
             }
@@ -1111,43 +1175,47 @@ function DocenteActividades() {
 
           {showForm && currentYearProgram ? (
             <SectionCard title={viewOnly ? 'Detalle de actividad' : editing ? 'Editar actividad' : 'Nueva actividad'}>
-              <form className="form-grid-full" onSubmit={handleSubmit}>
+              <form className="form-grid-full" onSubmit={handleActividadSubmit(onSubmitActividad)}>
                 <div className="form-row">
-                  <select
-                    className="select"
-                    value={formState.programa}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, programa: event.target.value }))}
-                    disabled={Boolean(editing) || viewOnly}
-                    required
-                  >
-                    <option value="">Programa</option>
-                    {programas.map((programa) => (
-                      <option key={programa.id} value={programa.id}>
-                        {programa.descripcion || `Programa ${programa.id}`}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="select"
-                    value={formState.tipo_actividad}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        tipo_actividad: event.target.value,
-                        clase_calendario: '',
-                        fecha_inicio_ta: '',
-                        fecha_fin_ta: '',
-                      }))
-                    }
-                    disabled={viewOnly}
-                  >
-                    <option value="">Tipo de actividad</option>
-                    {tipos.map((tipo) => (
-                      <option key={tipo.id} value={tipo.id}>
-                        {tipo.nombre} ({tipo.tipo_dedicacion})
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <select
+                      className={`select ${errorsActividad.programa ? 'input-error' : ''}`}
+                      disabled={Boolean(editing) || viewOnly}
+                      aria-invalid={errorsActividad.programa ? 'true' : 'false'}
+                      {...registerActividad('programa')}
+                    >
+                      <option value="">Programa</option>
+                      {programas.map((programa) => (
+                        <option key={programa.id} value={programa.id}>
+                          {programa.descripcion || `Programa ${programa.id}`}
+                        </option>
+                      ))}
+                    </select>
+                    {errorsActividad.programa && (
+                      <span className="error-text" role="alert">{errorsActividad.programa.message}</span>
+                    )}
+                  </div>
+                  <div>
+                    <select
+                      className="select"
+                      disabled={viewOnly}
+                      {...registerActividad('tipo_actividad', {
+                        onChange: (e) => {
+                          setActividadValue('tipo_actividad', e.target.value);
+                          setActividadValue('clase_calendario', '');
+                          setActividadValue('fecha_inicio_ta', '');
+                          setActividadValue('fecha_fin_ta', '');
+                        }
+                      })}
+                    >
+                      <option value="">Tipo de actividad</option>
+                      {tipos.map((tipo) => (
+                        <option key={tipo.id} value={tipo.id}>
+                          {tipo.nombre} ({tipo.tipo_dedicacion})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 <div className={isIpForm ? 'status-note' : 'status-note status-note-neutral'}>
@@ -1157,41 +1225,43 @@ function DocenteActividades() {
                 </div>
 
                 <div className="form-row">
-                  <select
-                    className="select"
-                    value={formState.modalidad_trabajo}
-                    onChange={(event) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        modalidad_trabajo: event.target.value as 'IND' | 'EQU',
-                      }))
-                    }
-                    disabled={viewOnly}
-                    required
-                  >
-                    <option value="IND">Trabajo individual</option>
-                    <option value="EQU">Trabajo en equipo</option>
-                  </select>
-                  <input
-                    className="input"
-                    type="number"
-                    min={0}
-                    placeholder="Minutos de duracion"
-                    value={formState.minutos}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, minutos: event.target.value }))}
-                    disabled={viewOnly}
-                    required
-                  />
+                  <div>
+                    <select
+                      className={`select ${errorsActividad.modalidad_trabajo ? 'input-error' : ''}`}
+                      disabled={viewOnly}
+                      aria-invalid={errorsActividad.modalidad_trabajo ? 'true' : 'false'}
+                      {...registerActividad('modalidad_trabajo')}
+                    >
+                      <option value="IND">Trabajo individual</option>
+                      <option value="EQU">Trabajo en equipo</option>
+                    </select>
+                    {errorsActividad.modalidad_trabajo && (
+                      <span className="error-text" role="alert">{errorsActividad.modalidad_trabajo.message}</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      className={`input ${errorsActividad.minutos ? 'input-error' : ''}`}
+                      type="number"
+                      min={0}
+                      placeholder="Minutos de duracion"
+                      disabled={viewOnly}
+                      aria-invalid={errorsActividad.minutos ? 'true' : 'false'}
+                      {...registerActividad('minutos', { valueAsNumber: true })}
+                    />
+                    {errorsActividad.minutos && (
+                      <span className="error-text" role="alert">{errorsActividad.minutos.message}</span>
+                    )}
+                  </div>
                 </div>
 
                 {isIpForm ? (
                   <div className="form-field-full">
                     <select
-                      className="select"
-                      value={formState.clase_calendario}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, clase_calendario: event.target.value }))}
+                      className={`select ${errorsActividad.clase_calendario ? 'input-error' : ''}`}
                       disabled={viewOnly}
-                      required
+                      aria-invalid={errorsActividad.clase_calendario ? 'true' : 'false'}
+                      {...registerActividad('clase_calendario')}
                     >
                       <option value="">Clase de calendario</option>
                       {clasesProgramaActivo.map((clase) => (
@@ -1200,38 +1270,56 @@ function DocenteActividades() {
                         </option>
                       ))}
                     </select>
+                    {errorsActividad.clase_calendario && (
+                      <span className="error-text" role="alert">{errorsActividad.clase_calendario.message}</span>
+                    )}
                   </div>
                 ) : (
                   <div className="form-row">
-                    <input
-                      className="input"
-                      type="date"
-                      value={formState.fecha_inicio_ta}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, fecha_inicio_ta: event.target.value }))}
-                      disabled={viewOnly}
-                    />
-                    <input
-                      className="input"
-                      type="date"
-                      value={formState.fecha_fin_ta}
-                      onChange={(event) => setFormState((prev) => ({ ...prev, fecha_fin_ta: event.target.value }))}
-                      disabled={viewOnly}
-                    />
+                    <div>
+                      <input
+                        className={`input ${errorsActividad.fecha_inicio_ta ? 'input-error' : ''}`}
+                        type="date"
+                        disabled={viewOnly}
+                        aria-invalid={errorsActividad.fecha_inicio_ta ? 'true' : 'false'}
+                        {...registerActividad('fecha_inicio_ta')}
+                      />
+                      {errorsActividad.fecha_inicio_ta && (
+                        <span className="error-text" role="alert">{errorsActividad.fecha_inicio_ta.message}</span>
+                      )}
+                    </div>
+                    <div>
+                      <input
+                        className={`input ${errorsActividad.fecha_fin_ta ? 'input-error' : ''}`}
+                        type="date"
+                        disabled={viewOnly}
+                        aria-invalid={errorsActividad.fecha_fin_ta ? 'true' : 'false'}
+                        {...registerActividad('fecha_fin_ta')}
+                      />
+                      {errorsActividad.fecha_fin_ta && (
+                        <span className="error-text" role="alert">{errorsActividad.fecha_fin_ta.message}</span>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <div className="form-field-full">
                   <select
-                    className="select"
-                    value={formState.unidad_ids.map(String)}
-                    onChange={(event) => {
-                      const selectedValues = Array.from(event.target.selectedOptions).map((option) => Number(option.value));
-                      setFormState((prev) => ({ ...prev, unidad_ids: selectedValues }));
-                    }}
+                    className={`select min-h-90 ${errorsActividad.unidad_ids ? 'input-error' : ''}`}
                     disabled={viewOnly || unidadesProgramaActivo.length === 0}
                     multiple
-                    required
-                    style={{ minHeight: '90px' }}
+                    aria-invalid={errorsActividad.unidad_ids ? 'true' : 'false'}
+                    {...registerActividad('unidad_ids', {
+                      setValueAs: (v: string | string[]) => {
+                        if (Array.isArray(v)) {
+                          return v.map(Number);
+                        }
+                        if (typeof v === 'string' && v !== '') {
+                          return [Number(v)];
+                        }
+                        return [];
+                      }
+                    })}
                   >
                     {unidadesProgramaActivo.length === 0 ? (
                       <option value="">No hay unidades en este programa</option>
@@ -1243,22 +1331,27 @@ function DocenteActividades() {
                       ))
                     )}
                   </select>
-                  <p className="muted" style={{ fontSize: '0.85rem', marginTop: '0.3rem' }}>
+                  {errorsActividad.unidad_ids && (
+                    <span className="error-text" role="alert">{errorsActividad.unidad_ids.message}</span>
+                  )}
+                  <p className="muted text-sm mt-1">
                     Manten presionado Ctrl/Cmd para seleccionar multiples unidades
                   </p>
                 </div>
 
                 <div className="form-field-full">
                   <textarea
-                    className="input"
+                    className={`input min-h-80 ${errorsActividad.descripcion ? 'input-error' : ''}`}
                     placeholder="Descripcion de la actividad"
-                    value={formState.descripcion}
-                    onChange={(event) => setFormState((prev) => ({ ...prev, descripcion: event.target.value }))}
                     disabled={viewOnly}
-                    required
                     rows={3}
-                    style={{ resize: 'vertical', minHeight: '80px' }}
+                    style={{ resize: 'vertical' }}
+                    aria-invalid={errorsActividad.descripcion ? 'true' : 'false'}
+                    {...registerActividad('descripcion')}
                   />
+                  {errorsActividad.descripcion && (
+                    <span className="error-text" role="alert">{errorsActividad.descripcion.message}</span>
+                  )}
                 </div>
                 <div className="form-actions">
                   {!viewOnly ? (
@@ -1453,52 +1546,61 @@ function DocenteActividades() {
           </SectionCard>
 
           <SectionCard title="Agregar clase extra o recuperacion" action={<FilePlus2 size={18} />}>
-            <p className="muted" style={{ marginTop: 0 }}>
+            <p className="muted mt-0">
               Utiliza esta accion cuando necesites sumar una fecha no planificada originalmente (por ejemplo, recuperacion).
             </p>
 
-            <div className="form-grid">
-              <input
-                className="input"
-                type="date"
-                value={extraClassForm.fecha}
-                onChange={(event) => setExtraClassForm((prev) => ({ ...prev, fecha: event.target.value }))}
-              />
-              <select
-                className="select"
-                value={extraClassForm.estado}
-                onChange={(event) =>
-                  setExtraClassForm((prev) => ({
-                    ...prev,
-                    estado: event.target.value as 'PLAN' | 'DICT' | 'CANC',
-                  }))
-                }
-              >
-                <option value="PLAN">Planificada</option>
-                <option value="DICT">Dictada</option>
-                <option value="CANC">Suspendida</option>
-              </select>
-              <input
-                className="input"
-                type="text"
-                placeholder="Observacion breve"
-                value={extraClassForm.observaciones}
-                onChange={(event) =>
-                  setExtraClassForm((prev) => ({ ...prev, observaciones: event.target.value }))
-                }
-              />
-            </div>
+            <form onSubmit={handleExtraClassSubmit(handleCreateExtraClassAction)}>
+              <div className="form-grid">
+                <div>
+                  <input
+                    className={`input ${errorsExtraClass.fecha ? 'input-error' : ''}`}
+                    type="date"
+                    aria-invalid={errorsExtraClass.fecha ? 'true' : 'false'}
+                    {...registerExtraClass('fecha')}
+                  />
+                  {errorsExtraClass.fecha && (
+                    <span className="error-text" role="alert">{errorsExtraClass.fecha.message}</span>
+                  )}
+                </div>
+                <div>
+                  <select
+                    className={`select ${errorsExtraClass.estado ? 'input-error' : ''}`}
+                    aria-invalid={errorsExtraClass.estado ? 'true' : 'false'}
+                    {...registerExtraClass('estado')}
+                  >
+                    <option value="PLAN">Planificada</option>
+                    <option value="DICT">Dictada</option>
+                    <option value="CANC">Suspendida</option>
+                  </select>
+                  {errorsExtraClass.estado && (
+                    <span className="error-text" role="alert">{errorsExtraClass.estado.message}</span>
+                  )}
+                </div>
+                <div>
+                  <input
+                    className={`input ${errorsExtraClass.observaciones ? 'input-error' : ''}`}
+                    type="text"
+                    placeholder="Observacion breve"
+                    aria-invalid={errorsExtraClass.observaciones ? 'true' : 'false'}
+                    {...registerExtraClass('observaciones')}
+                  />
+                  {errorsExtraClass.observaciones && (
+                    <span className="error-text" role="alert">{errorsExtraClass.observaciones.message}</span>
+                  )}
+                </div>
+              </div>
 
-            <div className="form-actions" style={{ marginTop: '0.8rem' }}>
-              <button
-                className="button"
-                type="button"
-                disabled={extraClassForm.loading}
-                onClick={handleCreateExtraClass}
-              >
-                {extraClassForm.loading ? 'Guardando...' : 'Agregar clase extra'}
-              </button>
-            </div>
+              <div className="form-actions mt-2">
+                <button
+                  className="button"
+                  type="submit"
+                  disabled={extraClassLoading}
+                >
+                  {extraClassLoading ? 'Guardando...' : 'Agregar clase extra'}
+                </button>
+              </div>
+            </form>
           </SectionCard>
         </>
       )}

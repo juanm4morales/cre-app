@@ -102,7 +102,7 @@ export default function DocenteEspacios() {
       <SectionCard title="Mis Espacios Curriculares">
         <div className="content-empty">
           <p>No tienes espacios curriculares asignados en este período.</p>
-          <p style={{ fontSize: '0.9rem', color: 'var(--muted)', marginTop: '0.5rem' }}>
+          <p className="text-sm text-muted mt-1">
             Contacta con el administrador para asignarte espacios.
           </p>
         </div>
@@ -112,7 +112,7 @@ export default function DocenteEspacios() {
 
   return (
     <SectionCard title="Mis Espacios Curriculares">
-      <p style={{ marginBottom: '1rem', fontSize: '0.95rem', color: 'var(--muted)' }}>
+      <p className="mb-3 text-muted">
         Selecciona un espacio curricular para continuar con tu planificación anual.
       </p>
       

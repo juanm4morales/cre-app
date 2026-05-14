@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface Carrera {
   id: number;
@@ -23,24 +23,17 @@ interface PaginatedResponse<T> {
 }
 
 function AdminCarreras() {
-  const [carreras, setCarreras] = useState<Carrera[]>([]);
-  const [unidades, setUnidades] = useState<UnidadAcademica[]>([]);
   const [selected, setSelected] = useState<Carrera | null>(null);
 
-  const loadData = useCallback(async () => {
-    const [carreraRes, unidadRes] = await Promise.all([
-      api.get<PaginatedResponse<Carrera>>('/carreras'),
-      api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas'),
-    ]);
-    setCarreras(carreraRes.data.results);
-    setUnidades(unidadRes.data.results);
-  }, []);
+  const { data: carreras = [] } = useQuery({
+    queryKey: ['carreras'],
+    queryFn: () => api.get<PaginatedResponse<Carrera>>('/carreras').then(res => res.data.results),
+  });
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  useApiAutoRefresh(loadData, []);
+  const { data: unidades = [] } = useQuery({
+    queryKey: ['unidades-academicas'],
+    queryFn: () => api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas').then(res => res.data.results),
+  });
 
   const unidadLookup = new Map(unidades.map((unidad) => [unidad.id, unidad.sigla]));
 
@@ -93,7 +86,7 @@ function AdminCarreras() {
               <div>{unidadLookup.get(selected.unidad_academica) || `UA ${selected.unidad_academica}`}</div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>

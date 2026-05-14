@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Eye, Edit, ToggleRight, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
@@ -6,6 +9,24 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const createUsuarioSchema = z.object({
+  username: z.string().min(1, 'El nombre de usuario es requerido'),
+  password: z.string().min(1, 'La contraseña es requerida'),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+});
+
+const updateUsuarioSchema = z.object({
+  username: z.string().min(1, 'El nombre de usuario es requerido'),
+  password: z.string().optional(),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  email: z.string().email('Email inválido').optional().or(z.literal('')),
+});
+
+type UsuarioFormValues = z.infer<typeof updateUsuarioSchema>;
 
 interface Usuario {
   id: number;
@@ -30,12 +51,21 @@ function AdminUsuarios() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id?: number }>({
     open: false,
   });
-  const [formState, setFormState] = useState({
-    username: '',
-    password: '',
-    first_name: '',
-    last_name: '',
-    email: '',
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<UsuarioFormValues>({
+    resolver: zodResolver(editing ? updateUsuarioSchema : createUsuarioSchema),
+    defaultValues: {
+      username: '',
+      password: '',
+      first_name: '',
+      last_name: '',
+      email: '',
+    },
   });
 
   const loadUsers = useCallback(async (background = false) => {
@@ -60,34 +90,37 @@ function AdminUsuarios() {
   useApiAutoRefresh(() => loadUsers(true), []);
 
   const resetForm = () => {
-    setFormState({ username: '', password: '', first_name: '', last_name: '', email: '' });
+    reset({ username: '', password: '', first_name: '', last_name: '', email: '' });
     setShowForm(false);
     setEditing(null);
   };
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (editing) {
-      const response = await api.patch<Usuario>(`/usuarios/${editing.id}`, {
-        first_name: formState.first_name,
-        last_name: formState.last_name,
-        email: formState.email,
-        password: formState.password || undefined,
-      });
-      setUsuarios((prev) => prev.map((item) => (item.id === editing.id ? response.data : item)));
-      resetForm();
-      return;
-    }
+  const onSubmit = async (data: UsuarioFormValues) => {
+    try {
+      if (editing) {
+        const response = await api.patch<Usuario>(`/usuarios/${editing.id}`, {
+          first_name: data.first_name,
+          last_name: data.last_name,
+          email: data.email,
+          password: data.password || undefined,
+        });
+        setUsuarios((prev) => prev.map((item) => (item.id === editing.id ? response.data : item)));
+        resetForm();
+        return;
+      }
 
-    const response = await api.post<Usuario>('/usuarios', formState);
-    setUsuarios((prev) => [response.data, ...prev]);
-    resetForm();
+      const response = await api.post<Usuario>('/usuarios', data);
+      setUsuarios((prev) => [response.data, ...prev]);
+      resetForm();
+    } catch {
+      toast.error('Error al guardar el usuario');
+    }
   };
 
   const handleEdit = (usuario: Usuario) => {
     setEditing(usuario);
     setShowForm(true);
-    setFormState({
+    reset({
       username: usuario.username,
       password: '',
       first_name: usuario.first_name,
@@ -117,7 +150,7 @@ function AdminUsuarios() {
         )
       );
       toast.success('Usuario dado de baja');
-    } catch (error) {
+    } catch {
       toast.error('Error al dar de baja el usuario');
     } finally {
       setDeleteConfirm({ open: false });
@@ -192,7 +225,7 @@ function AdminUsuarios() {
           type="button"
           onClick={() => {
             setShowForm(true);
-            setFormState({ username: '', password: '', first_name: '', last_name: '', email: '' });
+            reset({ username: '', password: '', first_name: '', last_name: '', email: '' });
             setEditing(null);
           }}
         >
@@ -202,45 +235,68 @@ function AdminUsuarios() {
 
       {showForm ? (
         <SectionCard title={editing ? 'Editar docente' : 'Alta de docente'}>
-          <form className="form-grid" onSubmit={handleSubmit}>
-            <input
-              className="input"
-              type="text"
-              placeholder="Username"
-              value={formState.username}
-              onChange={(event) => setFormState((prev) => ({ ...prev, username: event.target.value }))}
-              required={!editing}
-              disabled={Boolean(editing)}
-            />
-            <input
-              className="input"
-              type="password"
-              placeholder={editing ? 'Contrasena nueva (opcional)' : 'Contrasena'}
-              value={formState.password}
-              onChange={(event) => setFormState((prev) => ({ ...prev, password: event.target.value }))}
-              required={!editing}
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Nombre"
-              value={formState.first_name}
-              onChange={(event) => setFormState((prev) => ({ ...prev, first_name: event.target.value }))}
-            />
-            <input
-              className="input"
-              type="text"
-              placeholder="Apellido"
-              value={formState.last_name}
-              onChange={(event) => setFormState((prev) => ({ ...prev, last_name: event.target.value }))}
-            />
-            <input
-              className="input"
-              type="email"
-              placeholder="Email"
-              value={formState.email}
-              onChange={(event) => setFormState((prev) => ({ ...prev, email: event.target.value }))}
-            />
+          <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
+            <div>
+              <input
+                className={`input ${errors.username ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Username"
+                disabled={Boolean(editing)}
+                aria-invalid={errors.username ? 'true' : 'false'}
+                {...register('username')}
+              />
+              {errors.username && (
+                <span className="error-text" role="alert">{errors.username.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.password ? 'input-error' : ''}`}
+                type="password"
+                placeholder={editing ? 'Contraseña nueva (opcional)' : 'Contraseña'}
+                aria-invalid={errors.password ? 'true' : 'false'}
+                {...register('password')}
+              />
+              {errors.password && (
+                <span className="error-text" role="alert">{errors.password.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.first_name ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Nombre"
+                aria-invalid={errors.first_name ? 'true' : 'false'}
+                {...register('first_name')}
+              />
+              {errors.first_name && (
+                <span className="error-text" role="alert">{errors.first_name.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.last_name ? 'input-error' : ''}`}
+                type="text"
+                placeholder="Apellido"
+                aria-invalid={errors.last_name ? 'true' : 'false'}
+                {...register('last_name')}
+              />
+              {errors.last_name && (
+                <span className="error-text" role="alert">{errors.last_name.message}</span>
+              )}
+            </div>
+            <div>
+              <input
+                className={`input ${errors.email ? 'input-error' : ''}`}
+                type="email"
+                placeholder="Email"
+                aria-invalid={errors.email ? 'true' : 'false'}
+                {...register('email')}
+              />
+              {errors.email && (
+                <span className="error-text" role="alert">{errors.email.message}</span>
+              )}
+            </div>
             <div className="form-actions">
               <button className="button" type="submit" disabled={loading}>
                 {editing ? 'Guardar cambios' : 'Crear docente'}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -128,37 +128,24 @@ function isItemActive(pathname: string, item: NavLinkItem): boolean {
 
 function Sidebar({ role }: SidebarProps) {
   const location = useLocation();
-  const groups = navConfig[role] || [];
+  const groups = useMemo(() => navConfig[role] || [], [role]);
   const roleLabel = role === 'admin' ? 'Portal Administrativo' : 'Portal Docente';
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [toggledItems, setToggledItems] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    setExpandedItems((previous) => {
-      const nextState = { ...previous };
-
-      groups.forEach((group) => {
-        group.links.forEach((item) => {
-          if (!item.children) {
-            return;
-          }
-
-          if (previous[item.label] === undefined) {
-            nextState[item.label] = isItemActive(location.pathname, item);
-            return;
-          }
-
-          if (isItemActive(location.pathname, item)) {
-            nextState[item.label] = true;
-          }
-        });
+  const expandedItems = useMemo(() => {
+    const auto: Record<string, boolean> = {};
+    groups.forEach((group) => {
+      group.links.forEach((item) => {
+        if (item.children && isItemActive(location.pathname, item)) {
+          auto[item.label] = true;
+        }
       });
-
-      return nextState;
     });
-  }, [groups, location.pathname]);
+    return { ...toggledItems, ...auto };
+  }, [groups, location.pathname, toggledItems]);
 
   const handleToggleItem = (label: string) => {
-    setExpandedItems((previous) => ({ ...previous, [label]: !previous[label] }));
+    setToggledItems((previous) => ({ ...previous, [label]: !previous[label] }));
   };
 
   return (

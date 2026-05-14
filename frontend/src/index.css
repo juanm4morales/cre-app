@@ -10,17 +10,63 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --ink: #173042;
-  --muted: #61707f;
-  --surface: #f1f3ef;
-  --panel: #fcfcfa;
-  --panel-strong: #f0f2eb;
-  --sidebar-surface: #eef1e7;
-  --accent: #1f5d72;
-  --accent-bright: #2f7690;
-  --accent-warm: #a57a2a;
-  --border: #d6ddd2;
-  --shadow: 0 20px 40px rgba(23, 48, 66, 0.08);
+  /* Colors - Base Slate */
+  --color-slate-50: #f8fafc;
+  --color-slate-100: #f1f5f9;
+  --color-slate-200: #e2e8f0;
+  --color-slate-300: #cbd5e1;
+  --color-slate-400: #94a3b8;
+  --color-slate-500: #64748b;
+  --color-slate-600: #475569;
+  --color-slate-700: #334155;
+  --color-slate-800: #1e293b;
+  --color-slate-900: #0f172a;
+  
+  /* Colors - Primary (Modern Blue/Teal) */
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+
+  /* Colors - Semantic */
+  --color-bg-base: var(--color-slate-50);
+  --color-bg-panel: #ffffff;
+  --color-text-base: var(--color-slate-800);
+  --color-text-muted: var(--color-slate-500);
+  --color-border: var(--color-slate-200);
+  --color-danger: #ef4444;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+
+  /* Legacy Mappings (To avoid breaking existing styles) */
+  --ink: var(--color-text-base);
+  --muted: var(--color-text-muted);
+  --surface: var(--color-bg-base);
+  --panel: var(--color-bg-panel);
+  --panel-strong: var(--color-slate-100);
+  --sidebar-surface: var(--color-slate-50);
+  --accent: var(--color-primary-700);
+  --accent-bright: var(--color-primary-600);
+  --accent-warm: var(--color-warning);
+  --border: var(--color-border);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow: var(--shadow-md);
+
+  /* Radii */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
 }
 
 *,
@@ -33,10 +79,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 8% 10%, rgba(31, 93, 114, 0.12), transparent 34%),
-    radial-gradient(circle at 92% 10%, rgba(165, 122, 42, 0.1), transparent 28%),
-    linear-gradient(145deg, #f7f7f2 0%, #eef1eb 52%, #e7ece7 100%);
+  background: var(--color-bg-base);
   color: var(--ink);
 }
 

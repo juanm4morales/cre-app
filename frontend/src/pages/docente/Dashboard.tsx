@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import StatCard from '../../components/Common/StatCard';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface Programa {
   id: number;
@@ -46,83 +46,75 @@ interface EspacioResumen {
 
 function DocenteDashboard() {
   const currentYear = new Date().getFullYear();
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [planesEC, setPlanesEC] = useState<PlanEstudioEC[]>([]);
-  const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const loadData = useCallback(async (background = false) => {
-    if (!background) {
-      setLoading(true);
-    }
+  const { data: programas = [], isLoading: loadingProgramas } = useQuery({
+    queryKey: ['programas'],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas').then(res => res.data.results),
+  });
 
-    try {
-      const [programaRes, actividadRes, planEcRes, espaciosRes] = await Promise.all([
-        api.get<PaginatedResponse<Programa>>('/programas'),
-        api.get<PaginatedResponse<Actividad>>('/actividades'),
-        api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec'),
-        api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares'),
-      ]);
-      setProgramas(programaRes.data.results);
-      setActividades(actividadRes.data.results);
-      setPlanesEC(planEcRes.data.results);
-      setEspacios(espaciosRes.data.results);
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, []);
+  const { data: actividades = [], isLoading: loadingActividades } = useQuery({
+    queryKey: ['actividades'],
+    queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades').then(res => res.data.results),
+  });
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const { data: planesEC = [], isLoading: loadingPlanesEC } = useQuery({
+    queryKey: ['planes-estudio-ec'],
+    queryFn: () => api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec').then(res => res.data.results),
+  });
 
-  useApiAutoRefresh(() => loadData(true), []);
+  const { data: espacios = [], isLoading: loadingEspacios } = useQuery({
+    queryKey: ['espacios-curriculares'],
+    queryFn: () => api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares').then(res => res.data.results),
+  });
+
+  const loading = loadingProgramas || loadingActividades || loadingPlanesEC || loadingEspacios;
 
   // Agrupar datos por espacio curricular
-  const espaciosResumen: EspacioResumen[] = [];
-  const planEcMap = new Map<number, PlanEstudioEC>();
-  planesEC.forEach((pe) => planEcMap.set(pe.id, pe));
-  const espaciosMap = new Map<number, string>();
-  espacios.forEach((espacio) => espaciosMap.set(espacio.id, espacio.nombre));
+  const espaciosResumen = useMemo(() => {
+    const resumen: EspacioResumen[] = [];
+    const planEcMap = new Map<number, PlanEstudioEC>();
+    planesEC.forEach((pe) => planEcMap.set(pe.id, pe));
+    const espaciosMap = new Map<number, string>();
+    espacios.forEach((espacio) => espaciosMap.set(espacio.id, espacio.nombre));
 
-  const getEspacioNombre = (planEc: PlanEstudioEC) => {
-    if (typeof planEc.espacio_curricular === 'object' && planEc.espacio_curricular?.nombre) {
-      return planEc.espacio_curricular.nombre;
-    }
+    const getEspacioNombre = (planEc: PlanEstudioEC) => {
+      if (typeof planEc.espacio_curricular === 'object' && planEc.espacio_curricular?.nombre) {
+        return planEc.espacio_curricular.nombre;
+      }
 
-    const espacioId = Number(planEc.espacio_curricular);
-    if (Number.isFinite(espacioId) && espaciosMap.has(espacioId)) {
-      return espaciosMap.get(espacioId) || `EC ${espacioId}`;
-    }
+      const espacioId = Number(planEc.espacio_curricular);
+      if (Number.isFinite(espacioId) && espaciosMap.has(espacioId)) {
+        return espaciosMap.get(espacioId) || `EC ${espacioId}`;
+      }
 
-    return 'Espacio curricular sin nombre';
-  };
+      return 'Espacio curricular sin nombre';
+    };
 
-  const programasPorPlanEc = new Map<number, Programa[]>();
-  programas.forEach((prog) => {
-    const list = programasPorPlanEc.get(prog.plan_estudio_ec) || [];
-    list.push(prog);
-    programasPorPlanEc.set(prog.plan_estudio_ec, list);
-  });
-
-  programasPorPlanEc.forEach((progs, planEcId) => {
-    const planEc = planEcMap.get(planEcId);
-    if (!planEc) return;
-
-    const programaActual = progs.find((p) => p.anio_academico === currentYear);
-    const programasIds = progs.map((p) => p.id);
-    const actividadesEspacio = actividades.filter((a) => programasIds.includes(a.programa));
-
-    espaciosResumen.push({
-      nombre: getEspacioNombre(planEc),
-      programaActual,
-      totalHoras: actividadesEspacio.reduce((acc, a) => acc + Number(a.horas), 0),
-      cantidadActividades: actividadesEspacio.length,
+    const programasPorPlanEc = new Map<number, Programa[]>();
+    programas.forEach((prog) => {
+      const list = programasPorPlanEc.get(prog.plan_estudio_ec) || [];
+      list.push(prog);
+      programasPorPlanEc.set(prog.plan_estudio_ec, list);
     });
-  });
+
+    programasPorPlanEc.forEach((progs, planEcId) => {
+      const planEc = planEcMap.get(planEcId);
+      if (!planEc) return;
+
+      const programaActual = progs.find((p) => p.anio_academico === currentYear);
+      const programasIds = progs.map((p) => p.id);
+      const actividadesEspacio = actividades.filter((a) => programasIds.includes(a.programa));
+
+      resumen.push({
+        nombre: getEspacioNombre(planEc),
+        programaActual,
+        totalHoras: actividadesEspacio.reduce((acc, a) => acc + Number(a.horas), 0),
+        cantidadActividades: actividadesEspacio.length,
+      });
+    });
+
+    return resumen;
+  }, [programas, actividades, planesEC, espacios, currentYear]);
 
   const programasActuales = programas.filter((p) => p.anio_academico === currentYear);
   const totalHoras = actividades.reduce((acc, actividad) => acc + Number(actividad.horas), 0);

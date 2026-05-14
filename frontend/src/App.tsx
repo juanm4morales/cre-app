@@ -24,18 +24,38 @@ import AdminCarreras from './pages/admin/Carreras';
 import AdminUnidadesAcademicas from './pages/admin/UnidadesAcademicas';
 import AdminTiposActividad from './pages/admin/TiposActividad';
 
+import { useAuth } from './contexts/AuthContext';
+
+function IndexRedirect() {
+  const { isAuthenticated, role, loading } = useAuth();
+  if (loading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={role === 'admin' ? '/admin' : '/docente'} replace />;
+}
+
 function App() {
   return (
     <Router>
       <AuthProvider>
-        <Toaster position="top-right" richColors />
+        <Toaster
+          position="top-right"
+          richColors
+          closeButton
+          toastOptions={{
+            style: {
+              fontFamily: '"Source Sans 3", sans-serif',
+              fontSize: '0.9rem',
+              borderRadius: '0.75rem',
+            },
+          }}
+        />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
           <Route element={<ProtectedRoute requiredRole="docente" />}>
             <Route path="/docente" element={<DashboardLayout role="docente" />}>
-              <Route index element={<Navigate to="programas" replace />} />
+              <Route index element={<Navigate to="resumen" replace />} />
               <Route path="resumen" element={<DocenteDashboard />} />
               <Route path="espacios" element={<DocenteEspacios />} />
               <Route path="programas" element={<DocenteProgramas />} />
@@ -64,7 +84,7 @@ function App() {
             </Route>
           </Route>
 
-          <Route path="/" element={<Navigate to="/docente" replace />} />
+          <Route path="/" element={<IndexRedirect />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </AuthProvider>

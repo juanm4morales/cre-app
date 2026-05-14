@@ -9,7 +9,11 @@ export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
   const { isAuthenticated, role, loading } = useAuth();
 
   if (loading) {
-    return null;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <p role="status" aria-live="polite">Cargando aplicación...</p>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {
@@ -28,9 +32,9 @@ export function UnauthorizedPage() {
     <div className="auth-page">
       <div className="auth-card">
         <p className="eyebrow">Acceso restringido</p>
-        <h1>No tenes permisos para entrar</h1>
+        <h1>No tenés permisos para entrar</h1>
         <p className="muted">
-          Tu rol actual no tiene acceso a esta ruta. Pedi a un admin el permiso
+          Tu rol actual no tiene acceso a esta ruta. Pedí a un admin el permiso
           correcto.
         </p>
       </div>
@@ -43,8 +47,8 @@ export function NotFoundPage() {
     <div className="auth-page">
       <div className="auth-card">
         <p className="eyebrow">404</p>
-        <h1>Pagina no encontrada</h1>
-        <p className="muted">Revisa la URL o volve al inicio.</p>
+        <h1>Página no encontrada</h1>
+        <p className="muted">Revisá la URL o volvé al inicio.</p>
       </div>
     </div>
   );

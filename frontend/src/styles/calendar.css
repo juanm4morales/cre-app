@@ -1,0 +1,127 @@
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.calendar-head {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.calendar-cell {
+  min-height: 66px;
+  border-radius: 0.74rem;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.45rem;
+  cursor: default;
+}
+
+.calendar-cell:disabled {
+  cursor: default;
+  opacity: 0.55;
+  background: #fafbfc;
+}
+
+.calendar-cell.is-class-day {
+  border-style: dashed;
+  border-color: #b8d4e6;
+}
+
+.calendar-cell.has-class {
+  border-color: #87bce1;
+  background: #f1f9ff;
+  cursor: pointer;
+}
+
+.calendar-cell.has-class:hover {
+  background: #e3f1fb;
+  border-color: #5fa6d0;
+}
+
+.calendar-cell.ta-day {
+  cursor: pointer;
+  border-color: #bfd6a8;
+  background: #f7fbf2;
+}
+
+.calendar-cell.ta-day:hover {
+  border-color: #96bb70;
+  background: #ecf7df;
+}
+
+.calendar-cell.ta-has-activity {
+  border-color: #84aa5d;
+}
+
+.calendar-cell.ta-in-range {
+  background: #edf7df;
+  border-color: #91b86a;
+}
+
+.calendar-cell.ta-range-start,
+.calendar-cell.ta-range-end {
+  box-shadow: 0 0 0 2px rgba(114, 158, 66, 0.2);
+  border-color: #6b9b34;
+}
+
+.calendar-cell.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(6, 124, 178, 0.12);
+}
+
+.calendar-cell.muted-cell {
+  background: transparent;
+  border: 1px dashed #dfe8f0;
+  cursor: default;
+  pointer-events: none;
+}
+
+.hint-box {
+  border-radius: 0.8rem;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.9rem;
+}
+
+.hint-ip {
+  background: #e9f5ff;
+  border: 1px solid #a9d4f0;
+  color: #0e5075;
+}
+
+.hint-ta {
+  background: #f6f8eb;
+  border: 1px solid #d9dfb0;
+  color: #4e5f13;
+}
+
+.adjust-list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.adjust-item {
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  padding: 0.6rem 0.7rem;
+  display: grid;
+  gap: 0.2rem;
+}
+

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, CircleUserRound, LogOut } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import api, { APP_DATA_CHANGED_EVENT } from '../../services/api';
-import { getApiErrorMessage } from '../../utils/errors';
 
 interface TopbarProps {
   role: 'docente' | 'admin';
@@ -78,9 +78,9 @@ function Topbar({ role }: TopbarProps) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
-  const [planEcs, setPlanEcs] = useState<Map<number, number>>(new Map());
-  const [selectedEspacioId, setSelectedEspacioId] = useState<string>('');
+  const [selectedEspacioId, setSelectedEspacioId] = useState<string>(
+    () => (role === 'docente' ? sessionStorage.getItem('selected_espacio_curricular_id') || '' : '')
+  );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const roleLabel = role === 'admin' ? 'Gestión académica administrativa' : 'Gestión docente CRE';
@@ -91,41 +91,32 @@ function Topbar({ role }: TopbarProps) {
     return DOCENTE_REFRESH_PATHS.some((refreshPath) => path.startsWith(refreshPath));
   };
 
-  useEffect(() => {
-    if (role !== 'docente') return;
+  const { data: espacios = [] } = useQuery({
+    queryKey: ['espacios-asignados'],
+    queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then(res => {
+      return Array.isArray(res.data)
+        ? res.data
+        : isPaginatedResponse<EspacioCurricular>(res.data)
+          ? res.data.results
+          : [];
+    }),
+    enabled: role === 'docente',
+  });
 
-    const loadEspacios = async () => {
-      try {
-        const [espaciosRes, planEcsRes] = await Promise.all([
-          api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados'),
-          api.get<{ results: PlanEstudioEC[] }>('/planes-estudio-ec'),
-        ]);
+  const { data: planEcsData = [] } = useQuery({
+    queryKey: ['planes-estudio-ec'],
+    queryFn: () => api.get<{ results: PlanEstudioEC[] }>('/planes-estudio-ec').then(res => res.data.results || []),
+    enabled: role === 'docente',
+  });
 
-        const espaciosData = Array.isArray(espaciosRes.data)
-          ? espaciosRes.data
-          : isPaginatedResponse<EspacioCurricular>(espaciosRes.data)
-            ? espaciosRes.data.results
-            : [];
-        const relationMap = new Map<number, number>();
+  const planEcs = useMemo(() => {
+    const relationMap = new Map<number, number>();
+    planEcsData.forEach((planEc) => {
+      relationMap.set(planEc.espacio_curricular, planEc.id);
+    });
+    return relationMap;
+  }, [planEcsData]);
 
-        (planEcsRes.data.results || []).forEach((planEc) => {
-          relationMap.set(planEc.espacio_curricular, planEc.id);
-        });
-
-        setEspacios(espaciosData);
-        setPlanEcs(relationMap);
-
-        const currentEspacioId = sessionStorage.getItem('selected_espacio_curricular_id');
-        if (currentEspacioId) {
-          setSelectedEspacioId(currentEspacioId);
-        }
-      } catch (error) {
-        toast.error(getApiErrorMessage(error, 'No se pudo actualizar la lista de espacios curriculares.'));
-      }
-    };
-
-    loadEspacios();
-  }, [role]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

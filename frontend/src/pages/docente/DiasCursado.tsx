@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
 import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const diaClaseSchema = z.object({
+  dia_semana: z.number().int().min(0).max(6, 'Día inválido'),
+  hora_inicio: z.string().optional(),
+  hora_fin: z.string().optional(),
+}).refine(data => {
+  if (data.hora_inicio && !data.hora_fin) return false;
+  if (!data.hora_inicio && data.hora_fin) return false;
+  return true;
+}, { message: 'Completa hora de inicio y fin, o deja ambas vacías.', path: ['hora_fin'] }).refine(data => {
+  if (data.hora_inicio && data.hora_fin && data.hora_inicio >= data.hora_fin) return false;
+  return true;
+}, { message: 'La hora de fin debe ser posterior a la hora de inicio.', path: ['hora_fin'] });
+
+type DiaClaseFormValues = z.infer<typeof diaClaseSchema>;
 
 interface Programa {
   id: number;
@@ -44,7 +62,20 @@ function DocenteDiasCursado() {
   const [creatingPrograma, setCreatingPrograma] = useState(false);
   const [programas, setProgramas] = useState<Programa[]>([]);
   const [diasClase, setDiasClase] = useState<DiaClase[]>([]);
-  const [diaClaseForm, setDiaClaseForm] = useState({ dia_semana: '', hora_inicio: '', hora_fin: '' });
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<DiaClaseFormValues>({
+    resolver: zodResolver(diaClaseSchema),
+    defaultValues: {
+      dia_semana: 0,
+      hora_inicio: '',
+      hora_fin: '',
+    },
+  });
 
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
@@ -127,35 +158,23 @@ function DocenteDiasCursado() {
     }
   };
 
-  const handleCreateDiaClase = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const onSubmit = async (data: DiaClaseFormValues) => {
     if (!programaActual) {
       toast.error('Debes tener programa del año actual para cargar días.');
-      return;
-    }
-
-    const { hora_inicio: horaInicio, hora_fin: horaFin } = diaClaseForm;
-    if (Boolean(horaInicio) !== Boolean(horaFin)) {
-      toast.error('Completa hora de inicio y hora de fin, o deja ambas vacias.');
-      return;
-    }
-
-    if (horaInicio && horaFin && horaInicio >= horaFin) {
-      toast.error('La hora de fin debe ser posterior a la hora de inicio.');
       return;
     }
 
     try {
       const response = await api.post<DiaClase>('/dias-clase', {
         programa: programaActual.id,
-        dia_semana: Number(diaClaseForm.dia_semana),
-        hora_inicio: diaClaseForm.hora_inicio || null,
-        hora_fin: diaClaseForm.hora_fin || null,
+        dia_semana: data.dia_semana,
+        hora_inicio: data.hora_inicio || null,
+        hora_fin: data.hora_fin || null,
         activo: true,
       });
 
       setDiasClase((prev) => [...prev, response.data]);
-      setDiaClaseForm({ dia_semana: '', hora_inicio: '', hora_fin: '' });
+      reset();
       toast.success('Dia de cursado agregado.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo agregar el dia de cursado.'));
@@ -203,7 +222,7 @@ function DocenteDiasCursado() {
         {!programaActual ? (
           <>
             <p className="muted">No existe un programa para el año {currentYear}.</p>
-            <div className="form-actions" style={{ marginTop: '0.8rem' }}>
+            <div className="form-actions mt-2">
               <button
                 className="button"
                 type="button"
@@ -216,51 +235,59 @@ function DocenteDiasCursado() {
           </>
         ) : (
           <>
-            <p className="muted" style={{ marginTop: 0 }}>
+            <p className="muted mt-0">
               Configura aqui los dias y franjas horarias de clase que se usaran luego en la planificacion IP.
             </p>
 
-            <form className="form-grid" onSubmit={handleCreateDiaClase}>
-              <select
-                className="select"
-                value={diaClaseForm.dia_semana}
-                onChange={(event) =>
-                  setDiaClaseForm((prev) => ({ ...prev, dia_semana: event.target.value }))
-                }
-                required
-              >
-                <option value="">Día de la semana</option>
-                {DIAS_SEMANA.map((dia) => (
-                  <option key={dia.value} value={dia.value}>
-                    {dia.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                className="input"
-                type="time"
-                value={diaClaseForm.hora_inicio}
-                onChange={(event) =>
-                  setDiaClaseForm((prev) => ({ ...prev, hora_inicio: event.target.value }))
-                }
-              />
-              <input
-                className="input"
-                type="time"
-                value={diaClaseForm.hora_fin}
-                onChange={(event) =>
-                  setDiaClaseForm((prev) => ({ ...prev, hora_fin: event.target.value }))
-                }
-              />
+            <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
+              <div>
+                <select
+                  className={`select ${errors.dia_semana ? 'input-error' : ''}`}
+                  aria-invalid={errors.dia_semana ? 'true' : 'false'}
+                  {...register('dia_semana', { valueAsNumber: true })}
+                >
+                  <option value="">Día de la semana</option>
+                  {DIAS_SEMANA.map((dia) => (
+                    <option key={dia.value} value={dia.value}>
+                      {dia.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.dia_semana && (
+                  <span className="error-text" role="alert">{errors.dia_semana.message}</span>
+                )}
+              </div>
+              <div>
+                <input
+                  className={`input ${errors.hora_inicio ? 'input-error' : ''}`}
+                  type="time"
+                  aria-invalid={errors.hora_inicio ? 'true' : 'false'}
+                  {...register('hora_inicio')}
+                />
+                {errors.hora_inicio && (
+                  <span className="error-text" role="alert">{errors.hora_inicio.message}</span>
+                )}
+              </div>
+              <div>
+                <input
+                  className={`input ${errors.hora_fin ? 'input-error' : ''}`}
+                  type="time"
+                  aria-invalid={errors.hora_fin ? 'true' : 'false'}
+                  {...register('hora_fin')}
+                />
+                {errors.hora_fin && (
+                  <span className="error-text" role="alert">{errors.hora_fin.message}</span>
+                )}
+              </div>
               <div className="form-actions">
                 <button className="button" type="submit">
-                  <Plus size={16} style={{ marginRight: '0.35rem' }} />
+                  <Plus size={16} className="mr-1" />
                   Agregar bloque
                 </button>
               </div>
             </form>
 
-            <div className="chip-grid" style={{ marginTop: '1rem' }}>
+            <div className="chip-grid mt-3">
               {diasProgramaActual.length === 0 ? (
                 <span className="chip">Aún no hay bloques cargados en la agenda semanal.</span>
               ) : (
@@ -270,7 +297,7 @@ function DocenteDiasCursado() {
                       {formatDiaLabel(dia.dia_semana)}
                       {dia.hora_inicio && dia.hora_fin ? ` (${dia.hora_inicio} - ${dia.hora_fin})` : ''}
                     </span>
-                    <div className="form-actions" style={{ marginTop: '0.5rem' }}>
+                    <div className="form-actions mt-1">
                       <button
                         className="button button-ghost button-small"
                         type="button"
