@@ -10,7 +10,7 @@ interface DashboardLayoutProps {
 
 function DashboardLayout({ role }: DashboardLayoutProps) {
   const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
-  const environmentLabel = import.meta.env.MODE === 'production' ? 'Produccion' : 'Desarrollo';
+  const environmentLabel = import.meta.env.MODE === 'production' ? 'Producción' : 'Desarrollo';
 
   return (
     <div className="app-shell">
@@ -25,7 +25,7 @@ function DashboardLayout({ role }: DashboardLayoutProps) {
         <footer className="app-footer" aria-label="Informacion de la aplicacion">
           <div className="app-footer-left">
             <strong>UNCuyo</strong>
-            <span>CRE app</span>
+            <span>CREAPP</span>
           </div>
           <div className="app-footer-right">
             <span>v{appVersion}</span>

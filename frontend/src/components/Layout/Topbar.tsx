@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, CircleUserRound, LogOut } from 'lucide-react';
@@ -49,6 +49,9 @@ const ROUTE_LABELS: Record<string, string> = {
   '/admin/carreras': 'Carreras',
   '/admin/unidades-academicas': 'Unidades académicas',
   '/admin/tipos-actividad': 'Tipos de actividad',
+  '/admin/planes-estudio': 'Planes de estudio',
+  '/admin/competencias': 'Competencias',
+  '/admin/asignaciones-docentes': 'Asignaciones docentes',
   '/admin/reportes': 'Reportes',
 };
 
@@ -83,6 +86,8 @@ function Topbar({ role }: TopbarProps) {
   );
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const roleLabel = role === 'admin' ? 'Gestión académica administrativa' : 'Gestión docente CRE';
   const roleLabelCompact = role === 'admin' ? 'Gestión admin CRE' : 'Gestión docente CRE';
   const currentSection = getCurrentSectionLabel(location.pathname);
@@ -118,6 +123,11 @@ function Topbar({ role }: TopbarProps) {
   }, [planEcsData]);
 
 
+  const closeAndFocusTrigger = useCallback(() => {
+    setIsAccountMenuOpen(false);
+    triggerRef.current?.focus();
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (!accountMenuRef.current) {
@@ -132,6 +142,63 @@ function Topbar({ role }: TopbarProps) {
     window.addEventListener('mousedown', handleClickOutside);
     return () => window.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (isAccountMenuOpen) {
+      menuItemRefs.current[0]?.focus();
+    }
+  }, [isAccountMenuOpen]);
+
+  const handleMenuKeyDown = (event: React.KeyboardEvent) => {
+    const items = menuItemRefs.current.filter(Boolean) as HTMLButtonElement[];
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
+
+    switch (event.key) {
+      case 'Escape':
+        event.preventDefault();
+        closeAndFocusTrigger();
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        if (currentIndex < items.length - 1) {
+          items[currentIndex + 1]?.focus();
+        }
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        if (currentIndex > 0) {
+          items[currentIndex - 1]?.focus();
+        }
+        break;
+      case 'Tab':
+        event.preventDefault();
+        if (event.shiftKey) {
+          if (currentIndex > 0) {
+            items[currentIndex - 1]?.focus();
+          } else {
+            closeAndFocusTrigger();
+          }
+        } else {
+          if (currentIndex < items.length - 1) {
+            items[currentIndex + 1]?.focus();
+          } else {
+            closeAndFocusTrigger();
+          }
+        }
+        break;
+    }
+  };
+
+  const handleTriggerKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setIsAccountMenuOpen((prev) => !prev);
+    }
+    if (event.key === 'ArrowDown' && !isAccountMenuOpen) {
+      event.preventDefault();
+      setIsAccountMenuOpen(true);
+    }
+  };
 
   const handleChangeEspacio = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const espacioId = event.target.value;
@@ -196,11 +263,14 @@ function Topbar({ role }: TopbarProps) {
 
         <div className="account-menu" ref={accountMenuRef}>
           <button
+            ref={triggerRef}
             className="button button-ghost account-menu-trigger"
             type="button"
             onClick={() => setIsAccountMenuOpen((prev) => !prev)}
+            onKeyDown={handleTriggerKeyDown}
             aria-expanded={isAccountMenuOpen}
             aria-haspopup="menu"
+            aria-controls="topbar-account-menu"
           >
             <CircleUserRound size={16} />
             <span>{user?.name || 'Mi cuenta'}</span>
@@ -208,14 +278,21 @@ function Topbar({ role }: TopbarProps) {
           </button>
 
           {isAccountMenuOpen ? (
-            <div className="account-menu-dropdown" role="menu" aria-label="Menú de cuenta">
+            <div
+              id="topbar-account-menu"
+              className="account-menu-dropdown"
+              role="menu"
+              aria-label="Menú de cuenta"
+              onKeyDown={handleMenuKeyDown}
+            >
               {role === 'docente' ? (
                 <button
+                  ref={(el) => { menuItemRefs.current[0] = el; }}
                   className="account-menu-item"
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    setIsAccountMenuOpen(false);
+                    closeAndFocusTrigger();
                     navigate('/docente/perfil');
                   }}
                 >
@@ -224,11 +301,12 @@ function Topbar({ role }: TopbarProps) {
                 </button>
               ) : null}
               <button
+                ref={(el) => { menuItemRefs.current[role === 'docente' ? 1 : 0] = el; }}
                 className="account-menu-item"
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  setIsAccountMenuOpen(false);
+                  closeAndFocusTrigger();
                   void logout();
                 }}
               >

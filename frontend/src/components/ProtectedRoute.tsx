@@ -10,7 +10,7 @@ export function ProtectedRoute({ requiredRole }: ProtectedRouteProps) {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div className="route-loading">
         <p role="status" aria-live="polite">Cargando aplicación...</p>
       </div>
     );

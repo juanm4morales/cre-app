@@ -1,14 +1,44 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import SectionCard from '../../components/Common/SectionCard';
 import PlanningActivityCommonFields from '../../components/Forms/PlanningActivityCommonFields';
 import PlanningCalendar from '../../components/Forms/PlanningCalendar';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const taActivitySchema = z.object({
+  tipo_actividad: z.string().min(1, 'Seleccioná un tipo de actividad'),
+  descripcion: z.string().min(1, 'La descripción es requerida'),
+  minutos: z.string()
+    .min(1, 'Ingresa una duración en minutos')
+    .refine((value) => Number(value) > 0, 'Ingresa una duración mayor a 0'),
+  modalidad_trabajo: z.enum(['IND', 'EQU']),
+  unidad_ids: z.array(z.number()).min(1, 'Seleccioná al menos una unidad'),
+  fecha_inicio_ta: z.string().optional(),
+  fecha_fin_ta: z.string().optional(),
+}).refine(
+  (values) => !values.fecha_inicio_ta || !values.fecha_fin_ta || values.fecha_inicio_ta <= values.fecha_fin_ta,
+  { message: 'La fecha fin no puede ser anterior a la fecha inicio', path: ['fecha_fin_ta'] },
+);
+
+type TAActivityFormValues = z.infer<typeof taActivitySchema>;
+
+const defaultTAActivityValues: TAActivityFormValues = {
+  tipo_actividad: '',
+  descripcion: '',
+  minutos: '',
+  modalidad_trabajo: 'IND',
+  unidad_ids: [],
+  fecha_inicio_ta: '',
+  fecha_fin_ta: '',
+};
 
 interface PaginatedResponse<T> {
   results: T[];
@@ -53,10 +83,14 @@ function normalizeCollection<T>(data: PaginatedResponse<T> | T[] | null | undefi
 }
 
 function dateToIso(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function DocentePlanificacionTA() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
   const now = new Date();
@@ -64,61 +98,62 @@ function DocentePlanificacionTA() {
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [tipos, setTipos] = useState<TipoActividad[]>([]);
-  const [unidades, setUnidades] = useState<Unidad[]>([]);
-  const [actividades, setActividades] = useState<Actividad[]>([]);
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
 
-  const [formState, setFormState] = useState({
-    tipo_actividad: '',
-    descripcion: '',
-    minutos: '',
-    modalidad_trabajo: 'IND' as 'IND' | 'EQU',
-    unidad_ids: [] as number[],
-    fecha_inicio_ta: '',
-    fecha_fin_ta: '',
+  const queryEnabled = Boolean(selectedPlanEcId);
+
+  const programasQuery = useQuery({
+    queryKey: ['programas', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
   });
 
-  const loadData = useCallback(async (background = false) => {
-    if (!selectedPlanEcId) {
-      setLoading(false);
-      return;
-    }
+  const tiposQuery = useQuery({
+    queryKey: ['tipos-actividad'],
+    queryFn: () => api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad').then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-    if (!background) {
-      setLoading(true);
-    }
+  const unidadesQuery = useQuery({
+    queryKey: ['unidades', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Unidad>>('/unidades', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-    try {
-      const [programaRes, tiposRes, unidadesRes, actividadesRes] = await Promise.all([
-        api.get<PaginatedResponse<Programa>>('/programas', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-        api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad'),
-        api.get<PaginatedResponse<Unidad>>('/unidades', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-        api.get<PaginatedResponse<Actividad>>('/actividades', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-      ]);
+  const actividadesQuery = useQuery({
+    queryKey: ['actividades', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-      setProgramas(normalizeCollection(programaRes.data));
-      setTipos(normalizeCollection(tiposRes.data));
-      setUnidades(normalizeCollection(unidadesRes.data));
-      setActividades(normalizeCollection(actividadesRes.data));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo cargar la planificación TA.'));
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, [selectedPlanEcId]);
+  const programas = useMemo(() => programasQuery.data ?? [], [programasQuery.data]);
+  const tipos = useMemo(() => tiposQuery.data ?? [], [tiposQuery.data]);
+  const unidades = useMemo(() => unidadesQuery.data ?? [], [unidadesQuery.data]);
+  const actividades = useMemo(() => actividadesQuery.data ?? [], [actividadesQuery.data]);
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loading = queryEnabled && (
+    programasQuery.isLoading || tiposQuery.isLoading || unidadesQuery.isLoading || actividadesQuery.isLoading
+  );
 
-  useApiAutoRefresh(() => loadData(true), [selectedPlanEcId], { enabled: Boolean(selectedPlanEcId) });
+  const {
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<TAActivityFormValues>({
+    resolver: zodResolver(taActivitySchema),
+    defaultValues: defaultTAActivityValues,
+  });
+
+  const tipoActividadValue = watch('tipo_actividad');
+  const minutosValue = watch('minutos');
+  const modalidadTrabajoValue = watch('modalidad_trabajo');
+  const unidadIdsValue = watch('unidad_ids');
+  const descripcionValue = watch('descripcion');
+  const fechaInicioTaValue = watch('fecha_inicio_ta') || '';
+  const fechaFinTaValue = watch('fecha_fin_ta') || '';
 
   const programaActual = useMemo(
     () => programas.find((programa) => programa.anio_academico === currentYear) || null,
@@ -128,14 +163,12 @@ function DocentePlanificacionTA() {
   const tiposTA = useMemo(() => tipos.filter((tipo) => tipo.tipo_dedicacion === 'TA'), [tipos]);
 
   useEffect(() => {
-    if (!formState.tipo_actividad && tiposTA.length > 0) {
+    if (!tipoActividadValue && tiposTA.length > 0) {
       const defaultTipo = tiposTA[0];
-      if (!defaultTipo) {
-        return;
-      }
-      setFormState((prev) => ({ ...prev, tipo_actividad: String(defaultTipo.id) }));
+      if (!defaultTipo) return;
+      setValue('tipo_actividad', String(defaultTipo.id));
     }
-  }, [formState.tipo_actividad, tiposTA]);
+  }, [setValue, tipoActividadValue, tiposTA]);
 
   const unidadesProgramaActual = useMemo(() => {
     if (!programaActual) return [];
@@ -165,14 +198,17 @@ function DocentePlanificacionTA() {
   const handlePickRangeDate = (isoDate: string) => {
     if (!rangeAnchor) {
       setRangeAnchor(isoDate);
-      setFormState((prev) => ({ ...prev, fecha_inicio_ta: isoDate, fecha_fin_ta: '' }));
+      setValue('fecha_inicio_ta', isoDate, { shouldDirty: true, shouldValidate: true });
+      setValue('fecha_fin_ta', '', { shouldDirty: true, shouldValidate: true });
       return;
     }
 
     if (isoDate < rangeAnchor) {
-      setFormState((prev) => ({ ...prev, fecha_inicio_ta: isoDate, fecha_fin_ta: rangeAnchor }));
+      setValue('fecha_inicio_ta', isoDate, { shouldDirty: true, shouldValidate: true });
+      setValue('fecha_fin_ta', rangeAnchor, { shouldDirty: true, shouldValidate: true });
     } else {
-      setFormState((prev) => ({ ...prev, fecha_inicio_ta: rangeAnchor, fecha_fin_ta: isoDate }));
+      setValue('fecha_inicio_ta', rangeAnchor, { shouldDirty: true, shouldValidate: true });
+      setValue('fecha_fin_ta', isoDate, { shouldDirty: true, shouldValidate: true });
     }
 
     setRangeAnchor(null);
@@ -180,12 +216,11 @@ function DocentePlanificacionTA() {
 
   const clearRangeSelection = () => {
     setRangeAnchor(null);
-    setFormState((prev) => ({ ...prev, fecha_inicio_ta: '', fecha_fin_ta: '' }));
+    setValue('fecha_inicio_ta', '', { shouldDirty: true, shouldValidate: true });
+    setValue('fecha_fin_ta', '', { shouldDirty: true, shouldValidate: true });
   };
 
-  const handleCreateActividadTA = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleCreateActividadTA = async (values: TAActivityFormValues) => {
     if (!programaActual) {
       toast.error('Primero debes tener programa del año actual.');
       return;
@@ -196,50 +231,34 @@ function DocentePlanificacionTA() {
       return;
     }
 
-    const minutos = Number(formState.minutos);
-    if (!Number.isFinite(minutos) || minutos <= 0) {
-      toast.error('Ingresa una duración en minutos mayor a 0.');
-      return;
-    }
-
-    if (formState.unidad_ids.length === 0) {
-      toast.error('Selecciona al menos una unidad.');
-      return;
-    }
-
-    if (formState.fecha_inicio_ta && formState.fecha_fin_ta && formState.fecha_inicio_ta > formState.fecha_fin_ta) {
-      toast.error('La fecha fin no puede ser anterior a la fecha inicio.');
-      return;
-    }
-
-    setSaving(true);
+    const minutos = Number(values.minutos);
     try {
-      const response = await api.post<Actividad>('/actividades', {
+      await api.post<Actividad>('/actividades', {
         programa: programaActual.id,
-        tipo_actividad: Number(formState.tipo_actividad),
-        descripcion: formState.descripcion,
+        tipo_actividad: Number(values.tipo_actividad),
+        descripcion: values.descripcion,
         horas: Number((minutos / 60).toFixed(2)),
-        modalidad_trabajo: formState.modalidad_trabajo,
-        unidad_ids: formState.unidad_ids,
+        modalidad_trabajo: values.modalidad_trabajo,
+        unidad_ids: values.unidad_ids,
         clase_calendario: null,
-        fecha_inicio_ta: formState.fecha_inicio_ta || null,
-        fecha_fin_ta: formState.fecha_fin_ta || null,
+        fecha_inicio_ta: values.fecha_inicio_ta || null,
+        fecha_fin_ta: values.fecha_fin_ta || null,
       });
 
-      setActividades((prev) => [response.data, ...prev]);
-      setFormState((prev) => ({
-        ...prev,
+      queryClient.invalidateQueries({ queryKey: ['actividades', selectedPlanEcId] });
+      reset({
+        ...defaultTAActivityValues,
+        tipo_actividad: values.tipo_actividad,
+        modalidad_trabajo: values.modalidad_trabajo,
         descripcion: '',
         minutos: '',
         unidad_ids: [],
         fecha_inicio_ta: '',
         fecha_fin_ta: '',
-      }));
+      });
       toast.success('Actividad TA creada.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo crear la actividad TA.'));
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -249,7 +268,7 @@ function DocentePlanificacionTA() {
 
     try {
       await api.delete(`/actividades/${actividadId}`);
-      setActividades((prev) => prev.filter((actividad) => actividad.id !== actividadId));
+      queryClient.invalidateQueries({ queryKey: ['actividades', selectedPlanEcId] });
       toast.success('Actividad dada de baja.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo dar de baja la actividad.'));
@@ -259,7 +278,7 @@ function DocentePlanificacionTA() {
   if (!selectedPlanEcId) {
     return (
       <SectionCard title="Selección de espacio curricular">
-        <p className="muted">Selecciona un espacio curricular desde la barra superior.</p>
+        <p className="muted">Seleccioná un espacio curricular desde la barra superior.</p>
       </SectionCard>
     );
   }
@@ -327,7 +346,7 @@ function DocentePlanificacionTA() {
         <div className="context-card">
           <span className="context-label">Unidades activas</span>
           <strong>{unidadesProgramaActual.length}</strong>
-          <p>Selecciona una o varias unidades para contextualizar cada actividad.</p>
+          <p>Seleccioná una o varias unidades para contextualizar cada actividad.</p>
         </div>
         <div className="context-card">
           <span className="context-label">Carga TA</span>
@@ -337,13 +356,13 @@ function DocentePlanificacionTA() {
         <div className="context-card">
           <span className="context-label">Rango seleccionado</span>
           <strong>
-            {formState.fecha_inicio_ta
-              ? formState.fecha_fin_ta
-                ? `${formState.fecha_inicio_ta} a ${formState.fecha_fin_ta}`
-                : `${formState.fecha_inicio_ta} (pendiente fin)`
+            {fechaInicioTaValue
+              ? fechaFinTaValue
+                ? `${fechaInicioTaValue} a ${fechaFinTaValue}`
+                : `${fechaInicioTaValue} (pendiente fin)`
               : 'Sin rango'}
           </strong>
-          <p>Selecciona inicio y fin en el calendario lateral para acelerar la carga.</p>
+          <p>Seleccioná inicio y fin en el calendario lateral para acelerar la carga.</p>
         </div>
       </section>
 
@@ -358,7 +377,7 @@ function DocentePlanificacionTA() {
       <div className="planning-split">
         <SectionCard title="Calendario de trabajo TA">
           <div className="status-note status-note-neutral">
-            Selecciona un rango en el calendario para precargar fechas de inicio y fin.
+            Seleccioná un rango en el calendario para precargar fechas de inicio y fin.
           </div>
 
           <PlanningCalendar
@@ -368,24 +387,26 @@ function DocentePlanificacionTA() {
             onSelectDate={handlePickRangeDate}
             getCellMeta={(isoDate) => {
               const hasActivities = (taRangesByDate.get(isoDate) || 0) > 0;
-              const isRangeStart = Boolean(formState.fecha_inicio_ta) && isoDate === formState.fecha_inicio_ta;
-              const isRangeEnd = Boolean(formState.fecha_fin_ta) && isoDate === formState.fecha_fin_ta;
+              const isRangeStart = Boolean(fechaInicioTaValue) && isoDate === fechaInicioTaValue;
+              const isRangeEnd = Boolean(fechaFinTaValue) && isoDate === fechaFinTaValue;
               const isInRange =
-                Boolean(formState.fecha_inicio_ta)
-                && Boolean(formState.fecha_fin_ta)
-                && isoDate >= formState.fecha_inicio_ta
-                && isoDate <= formState.fecha_fin_ta;
+                Boolean(fechaInicioTaValue)
+                && Boolean(fechaFinTaValue)
+                && isoDate >= fechaInicioTaValue
+                && isoDate <= fechaFinTaValue;
 
               return {
                 className: `ta-day ${hasActivities ? 'ta-has-activity' : ''} ${isInRange ? 'ta-in-range' : ''} ${isRangeStart ? 'ta-range-start' : ''} ${isRangeEnd ? 'ta-range-end' : ''}`.trim(),
                 title: 'Seleccionar fecha para el rango TA',
+                ariaLabel: `${isoDate}: seleccionar fecha para el rango TA${hasActivities ? '. Tiene actividades TA cargadas' : ''}`,
+                ariaSelected: isInRange || isRangeStart || isRangeEnd,
                 showIcon: true,
-                badge: hasActivities ? <span className="table-row-pill">TA</span> : null,
+                badge: hasActivities ? <span className="table-row-pill pill-success">TA</span> : null,
               };
             }}
             compactList={
               actividadesTA.length === 0 ? (
-                <div className="status-note status-note-neutral">Aun no hay actividades TA cargadas en este programa.</div>
+                <div className="status-note status-note-neutral">Aún no hay actividades TA cargadas en este programa.</div>
               ) : (
                 actividadesTA.slice(0, 10).map((actividad) => (
                   <div className="planning-compact-item" key={actividad.id}>
@@ -403,39 +424,61 @@ function DocentePlanificacionTA() {
         </SectionCard>
 
         <SectionCard title="Nueva actividad TA">
-          <form className="form-grid-full planning-sticky-form" onSubmit={handleCreateActividadTA}>
+          <form className="form-grid-full planning-sticky-form" onSubmit={handleSubmit(handleCreateActividadTA)}>
             <div className="status-note status-note-neutral">
               El rango de fechas es opcional. Si no lo completas, la actividad queda asociada al programa y a las unidades elegidas.
             </div>
             <PlanningActivityCommonFields
+              idPrefix="planificacion-ta"
               tipos={tiposTA}
-              tipoActividad={formState.tipo_actividad}
-              minutos={formState.minutos}
-              modalidadTrabajo={formState.modalidad_trabajo}
-              unidadIds={formState.unidad_ids}
-              descripcion={formState.descripcion}
-              onTipoActividadChange={(value) => setFormState((prev) => ({ ...prev, tipo_actividad: value }))}
-              onMinutosChange={(value) => setFormState((prev) => ({ ...prev, minutos: value }))}
-              onModalidadTrabajoChange={(value) => setFormState((prev) => ({ ...prev, modalidad_trabajo: value }))}
-              onUnidadIdsChange={(value) => setFormState((prev) => ({ ...prev, unidad_ids: value }))}
-              onDescripcionChange={(value) => setFormState((prev) => ({ ...prev, descripcion: value }))}
+              tipoActividad={tipoActividadValue}
+              minutos={minutosValue}
+              modalidadTrabajo={modalidadTrabajoValue}
+              unidadIds={unidadIdsValue}
+              descripcion={descripcionValue}
+              onTipoActividadChange={(value) => setValue('tipo_actividad', value, { shouldDirty: true, shouldValidate: true })}
+              onMinutosChange={(value) => setValue('minutos', value, { shouldDirty: true, shouldValidate: true })}
+              onModalidadTrabajoChange={(value) => setValue('modalidad_trabajo', value, { shouldDirty: true, shouldValidate: true })}
+              onUnidadIdsChange={(value) => setValue('unidad_ids', value, { shouldDirty: true, shouldValidate: true })}
+              onDescripcionChange={(value) => setValue('descripcion', value, { shouldDirty: true, shouldValidate: true })}
               unidades={unidadesProgramaActual}
+              errors={{
+                tipoActividad: errors.tipo_actividad?.message,
+                minutos: errors.minutos?.message,
+                modalidadTrabajo: errors.modalidad_trabajo?.message,
+                unidadIds: errors.unidad_ids?.message,
+                descripcion: errors.descripcion?.message,
+              }}
             >
               <div className="form-row">
-                <input
-                  className="input"
-                  type="date"
-                  value={formState.fecha_inicio_ta}
-                  readOnly
-                  onChange={(event) => setFormState((prev) => ({ ...prev, fecha_inicio_ta: event.target.value }))}
-                />
-                <input
-                  className="input"
-                  type="date"
-                  value={formState.fecha_fin_ta}
-                  readOnly
-                  onChange={(event) => setFormState((prev) => ({ ...prev, fecha_fin_ta: event.target.value }))}
-                />
+                <label className="grid-label" htmlFor="planificacion-ta-fecha-inicio">
+                  <span className="muted">Fecha inicio TA</span>
+                  <input
+                    id="planificacion-ta-fecha-inicio"
+                    className="input"
+                    type="date"
+                    value={fechaInicioTaValue}
+                    readOnly
+                    aria-invalid={Boolean(errors.fecha_inicio_ta)}
+                    aria-describedby={errors.fecha_inicio_ta ? 'planificacion-ta-fecha-inicio-error' : undefined}
+                    onChange={(event) => setValue('fecha_inicio_ta', event.target.value, { shouldDirty: true, shouldValidate: true })}
+                  />
+                  {errors.fecha_inicio_ta ? <span id="planificacion-ta-fecha-inicio-error" className="error-text" role="alert">{errors.fecha_inicio_ta.message}</span> : null}
+                </label>
+                <label className="grid-label" htmlFor="planificacion-ta-fecha-fin">
+                  <span className="muted">Fecha fin TA</span>
+                  <input
+                    id="planificacion-ta-fecha-fin"
+                    className="input"
+                    type="date"
+                    value={fechaFinTaValue}
+                    readOnly
+                    aria-invalid={Boolean(errors.fecha_fin_ta)}
+                    aria-describedby={errors.fecha_fin_ta ? 'planificacion-ta-fecha-fin-error' : undefined}
+                    onChange={(event) => setValue('fecha_fin_ta', event.target.value, { shouldDirty: true, shouldValidate: true })}
+                  />
+                  {errors.fecha_fin_ta ? <span id="planificacion-ta-fecha-fin-error" className="error-text" role="alert">{errors.fecha_fin_ta.message}</span> : null}
+                </label>
               </div>
             </PlanningActivityCommonFields>
 
@@ -445,8 +488,8 @@ function DocentePlanificacionTA() {
               </button>
             </div>
 
-            <button className="button" type="submit" disabled={saving || tiposTA.length === 0}>
-              {saving ? 'Guardando...' : 'Crear actividad TA'}
+            <button className="button" type="submit" disabled={isSubmitting || tiposTA.length === 0}>
+              {isSubmitting ? 'Guardando...' : 'Crear actividad TA'}
             </button>
           </form>
         </SectionCard>
@@ -456,7 +499,7 @@ function DocentePlanificacionTA() {
         {rows.length === 0 ? (
           <p className="muted">Aún no hay actividades TA cargadas.</p>
         ) : (
-          <BasicTable columns={['Actividad', 'Duración', 'Modalidad', 'Rango TA', 'Acciones']} rows={rows} />
+          <BasicTable columns={['Actividad', 'Duración', 'Modalidad', 'Rango TA', 'Acciones']} rows={rows} pageSize={10} />
         )}
       </SectionCard>
     </>

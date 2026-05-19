@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import type { Transition } from 'framer-motion';
 import type { ReactNode } from 'react';
 
 const pageVariants = {
@@ -7,7 +8,7 @@ const pageVariants = {
   exit: { opacity: 0, y: -8 },
 };
 
-const pageTransition = {
+const pageTransition: Transition = {
   type: 'spring',
   stiffness: 260,
   damping: 24,

@@ -7,11 +7,14 @@ import {
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
+  Clock3,
   Edit,
   Eye,
   FilePlus2,
+  ListFilter,
   Plus,
   Repeat2,
+  RotateCcw,
   Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,7 +29,7 @@ const actividadSchema = z.object({
   programa: z.string().min(1, 'El programa es requerido'),
   tipo_actividad: z.string().optional(),
   modalidad_trabajo: z.enum(['IND', 'EQU']),
-  unidad_ids: z.array(z.number()).min(1, 'Selecciona al menos una unidad para la actividad'),
+  unidad_ids: z.array(z.number()).min(1, 'Seleccioná al menos una unidad para la actividad'),
   descripcion: z.string().min(1, 'La descripción es requerida'),
   minutos: z.number().min(0, 'Los minutos deben ser mayor o igual a 0'),
   clase_calendario: z.string().optional(),
@@ -54,7 +57,14 @@ const extraClassSchema = z.object({
 type ExtraClassFormValues = z.infer<typeof extraClassSchema>;
 
 type WorkflowMode = 'PLAN' | 'EXEC';
-type ExecutionFilter = 'PENDIENTES_REGISTRAR' | 'HOY_ANTERIORES' | 'PENDIENTES' | 'TODAS' | 'INCIDENCIAS';
+type ExecutionFilter =
+  | 'PENDIENTES_REGISTRAR'
+  | 'VENCIDAS'
+  | 'NO_VENCIDAS'
+  | 'HOY_ANTERIORES'
+  | 'PENDIENTES'
+  | 'TODAS'
+  | 'INCIDENCIAS';
 
 interface Actividad {
   id: number;
@@ -133,7 +143,13 @@ function normalizeCollection<T>(data: PaginatedResponse<T> | T[] | null | undefi
   return [];
 }
 
-const DAY_NAMES = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'];
+const DAY_NAMES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const CLASS_DATE_FORMATTER = new Intl.DateTimeFormat('es-AR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'short',
+});
 
 function dateToIso(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -144,6 +160,32 @@ function toLocalIsoDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function parseIsoLocalDate(isoDate: string): Date {
+  return new Date(`${isoDate}T00:00:00`);
+}
+
+function formatClassDate(isoDate: string): string {
+  return CLASS_DATE_FORMATTER.format(parseIsoLocalDate(isoDate));
+}
+
+function getClassStatusLabel(status: ClaseCalendario['estado']): string {
+  if (status === 'DICT') return 'Dictada';
+  if (status === 'CANC') return 'Suspendida';
+  return 'Planificada';
+}
+
+function getClassTimingLabel(isoDate: string, todayIso: string): string {
+  const diffDays = Math.round(
+    (parseIsoLocalDate(isoDate).getTime() - parseIsoLocalDate(todayIso).getTime()) / DAY_IN_MS
+  );
+
+  if (diffDays === 0) return 'Hoy';
+  if (diffDays === -1) return 'Vencida ayer';
+  if (diffDays < 0) return `Vencida hace ${Math.abs(diffDays)} días`;
+  if (diffDays === 1) return 'Mañana';
+  return `En ${diffDays} días`;
 }
 
 function DocenteActividades() {
@@ -394,25 +436,37 @@ function DocenteActividades() {
       actividades: ipActivitiesByClass.get(clase.id) || [],
     }));
 
+    let filteredRows = withRelated;
+
     if (executionFilter === 'PENDIENTES_REGISTRAR') {
-      return withRelated.filter((item) => item.clase.estado === 'PLAN' && item.clase.fecha <= todayIso);
-    }
-
-    if (executionFilter === 'HOY_ANTERIORES') {
-      return withRelated.filter((item) => item.clase.fecha <= todayIso);
-    }
-
-    if (executionFilter === 'PENDIENTES') {
-      return withRelated.filter((item) => item.clase.estado === 'PLAN');
-    }
-
-    if (executionFilter === 'INCIDENCIAS') {
-      return withRelated.filter(
+      filteredRows = withRelated.filter((item) => item.clase.estado === 'PLAN' && item.clase.fecha <= todayIso);
+    } else if (executionFilter === 'VENCIDAS') {
+      filteredRows = withRelated.filter((item) => item.clase.estado === 'PLAN' && item.clase.fecha < todayIso);
+    } else if (executionFilter === 'NO_VENCIDAS') {
+      filteredRows = withRelated.filter((item) => item.clase.estado === 'PLAN' && item.clase.fecha >= todayIso);
+    } else if (executionFilter === 'HOY_ANTERIORES') {
+      filteredRows = withRelated.filter((item) => item.clase.fecha <= todayIso);
+    } else if (executionFilter === 'PENDIENTES') {
+      filteredRows = withRelated.filter((item) => item.clase.estado === 'PLAN');
+    } else if (executionFilter === 'INCIDENCIAS') {
+      filteredRows = withRelated.filter(
         (item) => item.clase.estado === 'CANC' || (item.clase.observaciones || '').trim().length > 0
       );
     }
 
-    return withRelated;
+    return [...filteredRows].sort((a, b) => {
+      const aIsCurrentOrPast = a.clase.fecha <= todayIso;
+      const bIsCurrentOrPast = b.clase.fecha <= todayIso;
+
+      if (aIsCurrentOrPast && bIsCurrentOrPast) {
+        return b.clase.fecha.localeCompare(a.clase.fecha);
+      }
+
+      if (aIsCurrentOrPast) return -1;
+      if (bIsCurrentOrPast) return 1;
+
+      return a.clase.fecha.localeCompare(b.clase.fecha);
+    });
   }, [classesSortedByDate, ipActivitiesByClass, executionFilter]);
 
   const executionStats = useMemo(() => {
@@ -425,8 +479,68 @@ function DocenteActividades() {
       (clase) => clase.estado === 'PLAN' && clase.fecha <= todayIso
     ).length;
     const vencidas = classesSortedByDate.filter((clase) => clase.estado === 'PLAN' && clase.fecha < todayIso).length;
-    return { total, dictadas, canceladas, pendientes, pendientesRegistrar, vencidas };
+    const noVencidas = classesSortedByDate.filter((clase) => clase.estado === 'PLAN' && clase.fecha >= todayIso).length;
+    const hastaHoy = classesSortedByDate.filter((clase) => clase.fecha <= todayIso).length;
+    const incidencias = classesSortedByDate.filter(
+      (clase) => clase.estado === 'CANC' || (clase.observaciones || '').trim().length > 0
+    ).length;
+    return { total, dictadas, canceladas, pendientes, pendientesRegistrar, vencidas, noVencidas, hastaHoy, incidencias };
   }, [classesSortedByDate]);
+
+  const latestDueClass = useMemo(() => {
+    const todayIso = toLocalIsoDate(new Date());
+    return [...classesSortedByDate]
+      .filter((clase) => clase.fecha <= todayIso)
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))[0] || null;
+  }, [classesSortedByDate]);
+
+  const executionFilterOptions = useMemo<Array<{ id: ExecutionFilter; label: string; count: number; help: string }>>(
+    () => [
+      {
+        id: 'PENDIENTES_REGISTRAR',
+        label: 'Para registrar',
+        count: executionStats.pendientesRegistrar,
+        help: 'Planificadas hasta hoy',
+      },
+      {
+        id: 'VENCIDAS',
+        label: 'Vencidas',
+        count: executionStats.vencidas,
+        help: 'Antes de hoy sin cierre',
+      },
+      {
+        id: 'NO_VENCIDAS',
+        label: 'No vencidas',
+        count: executionStats.noVencidas,
+        help: 'Hoy o futuras pendientes',
+      },
+      {
+        id: 'HOY_ANTERIORES',
+        label: 'Hasta hoy',
+        count: executionStats.hastaHoy,
+        help: 'Historial y jornada actual',
+      },
+      {
+        id: 'PENDIENTES',
+        label: 'Pendientes',
+        count: executionStats.pendientes,
+        help: 'Todas las planificadas',
+      },
+      {
+        id: 'INCIDENCIAS',
+        label: 'Incidencias',
+        count: executionStats.incidencias,
+        help: 'Suspendidas u observadas',
+      },
+      {
+        id: 'TODAS',
+        label: 'Todas',
+        count: executionStats.total,
+        help: 'Calendario completo',
+      },
+    ],
+    [executionStats]
+  );
 
   useEffect(() => {
     if (watchPrograma || !currentYearProgram) {
@@ -844,9 +958,9 @@ function DocenteActividades() {
 
   if (!selectedPlanEcId) {
     return (
-      <SectionCard title="Seleccion de espacio curricular">
+      <SectionCard title="Selección de espacio curricular">
         <p className="muted">
-          Usa el desplegable superior para elegir un espacio curricular y continuar con la planificacion.
+          Usa el desplegable superior para elegir un espacio curricular y continuar con la planificación.
         </p>
       </SectionCard>
     );
@@ -890,7 +1004,7 @@ function DocenteActividades() {
                       aria-invalid={errorsAjuste.tipo ? 'true' : 'false'}
                       {...registerAjuste('tipo')}
                     >
-                      <option value="REC">Recuperacion</option>
+                      <option value="REC">Recuperación</option>
                       <option value="EXT">Extension</option>
                     </select>
                     {errorsAjuste.tipo && (
@@ -945,12 +1059,12 @@ function DocenteActividades() {
               {adjustModal.loading ? (
                 <p className="muted">Cargando historial...</p>
               ) : adjustModal.history.length === 0 ? (
-                <p className="muted">Aun no hay ajustes registrados para esta actividad.</p>
+                <p className="muted">Aún no hay ajustes registrados para esta actividad.</p>
               ) : (
                 <div className="adjust-list">
                   {adjustModal.history.map((item) => (
                     <div className="adjust-item" key={item.id}>
-                      <strong>{item.tipo === 'REC' ? 'Recuperacion' : 'Extension'}</strong>
+                      <strong>{item.tipo === 'REC' ? 'Recuperación' : 'Extension'}</strong>
                       <span>{item.motivo}</span>
                       <span>
                         Horas extra: {item.horas_ip_extra} | Fecha: {item.fecha_evento || '-'} | Por: {item.creado_por_username}
@@ -975,10 +1089,10 @@ function DocenteActividades() {
 
       <section className="page-header docente-hero">
         <div>
-          <p className="eyebrow">Gestion de actividades</p>
+          <p className="eyebrow">Gestión de actividades</p>
           <h2>
             {selectedEspacioNombre || 'Gestor docente'}
-            {workflowMode === 'PLAN' ? ' | Planificacion' : ' | Seguimiento de clases IP'}
+            {workflowMode === 'PLAN' ? ' | Planificación' : ' | Seguimiento de clases IP'}
           </h2>
           {workflowMode === 'PLAN' ? (
             <p>Organiza actividades IP/TA y el calendario de clases del cursado.</p>
@@ -993,7 +1107,7 @@ function DocenteActividades() {
             </button>
           ) : (
             <button className="button button-ghost" type="button" onClick={() => navigate('/docente/planificacion')}>
-              Volver a planificacion
+              Volver a planificación
             </button>
           )}
         </div>
@@ -1040,12 +1154,12 @@ function DocenteActividades() {
                 <div className="context-card">
                   <span className="context-label">Dias configurados</span>
                   <strong>{allowedWeekDays.size}</strong>
-                  <p>El calendario resalta solo los dias habilitados para cursado.</p>
+                  <p>El calendario resalta solo los días habilitados para cursado.</p>
                 </div>
                 <div className="context-card">
                   <span className="context-label">Clases del rango</span>
                   <strong>{classesSortedByDate.length}</strong>
-                  <p>Genera o actualiza clases dentro del periodo que definas abajo.</p>
+                  <p>Genera o actualiza clases dentro del período que definas abajo.</p>
                 </div>
               </div>
 
@@ -1102,13 +1216,14 @@ function DocenteActividades() {
                 </button>
               </div>
 
-              <div className="calendar-grid">
-                {DAY_NAMES.map((day) => (
-                  <div className="calendar-head" key={day}>
-                    {day}
-                  </div>
-                ))}
-                {calendarCells.map((cell, index) => {
+              <div className="calendar-scroll-wrap">
+                <div className="calendar-grid">
+                  {DAY_NAMES.map((day) => (
+                    <div className="calendar-head" key={day}>
+                      {day}
+                    </div>
+                  ))}
+                  {calendarCells.map((cell, index) => {
                   if (!cell.iso || !cell.date) {
                     return <div className="calendar-cell muted-cell" key={`empty-${index}`} />;
                   }
@@ -1126,6 +1241,7 @@ function DocenteActividades() {
                       key={cellIso}
                       onClick={() => handleCalendarPick(cellIso)}
                       disabled={!clase || !firstIpType}
+                      aria-current={cellIso === toLocalIsoDate(new Date()) ? 'date' : undefined}
                       title={
                         !clase
                           ? 'No hay clase registrada en esta fecha'
@@ -1134,11 +1250,16 @@ function DocenteActividades() {
                             : 'Cargar actividad IP sobre esta clase'
                       }
                     >
-                      <span>{cell.date.getDate()}</span>
-                      {clase ? <CalendarDays size={14} /> : null}
+                      <span className="calendar-day-number">{cell.date.getDate()}</span>
+                      {clase ? (
+                        <span className="calendar-cell-icon" aria-hidden="true">
+                          <CalendarDays size={14} />
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
+                </div>
               </div>
             </SectionCard>
           )}
@@ -1170,6 +1291,7 @@ function DocenteActividades() {
             <BasicTable
               columns={['Actividad', 'Tipo', 'Duracion', 'Modalidad', 'Unidades', 'Agenda', 'Ajustes', 'Acciones']}
               rows={rows}
+              pageSize={10}
             />
           </SectionCard>
 
@@ -1369,70 +1491,90 @@ function DocenteActividades() {
         </>
       ) : (
         <>
-          <SectionCard title="Ejecucion de clases IP">
-            <div className="docente-kpi-grid">
-              <div className="docente-kpi kpi-success">
-                <h4>Clases dictadas</h4>
-                <strong>{executionStats.dictadas}</strong>
+          <SectionCard title="Seguimiento de clases IP" action={<Clock3 size={18} />}>
+            <div className="execution-command-center">
+              <div className="execution-priority-card">
+                <span className="execution-priority-label">Clase más reciente hasta hoy</span>
+                {latestDueClass ? (
+                  <>
+                    <strong>{formatClassDate(latestDueClass.fecha)}</strong>
+                    <p>
+                      {getClassStatusLabel(latestDueClass.estado)} ·{' '}
+                      {ipActivitiesByClass.get(latestDueClass.id)?.length ?? 0} actividades IP asociadas
+                    </p>
+                    <span className="execution-priority-meta">
+                      {latestDueClass.estado === 'PLAN'
+                        ? getClassTimingLabel(latestDueClass.fecha, toLocalIsoDate(new Date()))
+                        : 'Ya registrada'}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <strong>Sin clases hasta hoy</strong>
+                    <p>Cuando el calendario tenga fechas alcanzadas, la más reciente aparecerá primera.</p>
+                  </>
+                )}
               </div>
-              <div className="docente-kpi kpi-warning">
-                <h4>Pendientes de registrar</h4>
-                <strong>{executionStats.pendientesRegistrar}</strong>
-              </div>
-              <div className="docente-kpi kpi-pending">
-                <h4>Pendientes</h4>
-                <strong>{executionStats.pendientes}</strong>
-              </div>
-              <div className="docente-kpi kpi-danger">
-                <h4>Suspendidas</h4>
-                <strong>{executionStats.canceladas}</strong>
-              </div>
-              <div className="docente-kpi">
-                <h4>Total calendario</h4>
-                <strong>{executionStats.total}</strong>
+
+              <div className="docente-kpi-grid execution-kpi-grid">
+                <div className="docente-kpi kpi-danger">
+                  <h4>Vencidas</h4>
+                  <strong>{executionStats.vencidas}</strong>
+                  <span>Antes de hoy sin registrar</span>
+                </div>
+                <div className="docente-kpi kpi-warning">
+                  <h4>Para registrar</h4>
+                  <strong>{executionStats.pendientesRegistrar}</strong>
+                  <span>Planificadas hasta hoy</span>
+                </div>
+                <div className="docente-kpi kpi-info">
+                  <h4>No vencidas</h4>
+                  <strong>{executionStats.noVencidas}</strong>
+                  <span>Hoy o futuras pendientes</span>
+                </div>
+                <div className="docente-kpi kpi-success">
+                  <h4>Dictadas</h4>
+                  <strong>{executionStats.dictadas}</strong>
+                  <span>Clases cerradas</span>
+                </div>
+                <div className="docente-kpi kpi-pending">
+                  <h4>Suspendidas</h4>
+                  <strong>{executionStats.canceladas}</strong>
+                  <span>Con incidencia</span>
+                </div>
+                <div className="docente-kpi">
+                  <h4>Total calendario</h4>
+                  <strong>{executionStats.total}</strong>
+                  <span>Clases generadas</span>
+                </div>
               </div>
             </div>
 
-            <p className="execution-filter-helper">
-              En Seguimiento se priorizan clases hasta hoy para registrar si fueron dictadas o suspendidas.
-            </p>
-
-            <div className="execution-filter-row">
-              <button
-                className={`button button-ghost ${executionFilter === 'PENDIENTES_REGISTRAR' ? 'is-filter-active' : ''}`}
-                type="button"
-                onClick={() => setExecutionFilter('PENDIENTES_REGISTRAR')}
-              >
-                Pendientes de registrar
-              </button>
-              <button
-                className={`button button-ghost ${executionFilter === 'HOY_ANTERIORES' ? 'is-filter-active' : ''}`}
-                type="button"
-                onClick={() => setExecutionFilter('HOY_ANTERIORES')}
-              >
-                Hoy y anteriores
-              </button>
-              <button
-                className={`button button-ghost ${executionFilter === 'PENDIENTES' ? 'is-filter-active' : ''}`}
-                type="button"
-                onClick={() => setExecutionFilter('PENDIENTES')}
-              >
-                Pendientes
-              </button>
-              <button
-                className={`button button-ghost ${executionFilter === 'TODAS' ? 'is-filter-active' : ''}`}
-                type="button"
-                onClick={() => setExecutionFilter('TODAS')}
-              >
-                Todas
-              </button>
-              <button
-                className={`button button-ghost ${executionFilter === 'INCIDENCIAS' ? 'is-filter-active' : ''}`}
-                type="button"
-                onClick={() => setExecutionFilter('INCIDENCIAS')}
-              >
-                Con incidencias
-              </button>
+            <div className="execution-filter-toolbar">
+              <div className="execution-filter-title">
+                <ListFilter size={18} />
+                <div>
+                  <strong>Filtros de seguimiento</strong>
+                  <p>
+                    La lista muestra primero la clase más reciente con fecha menor o igual a hoy; las futuras quedan debajo.
+                  </p>
+                </div>
+              </div>
+              <div className="execution-filter-row" role="group" aria-label="Filtros de clases IP">
+                {executionFilterOptions.map((option) => (
+                  <button
+                    className={`execution-filter-chip ${executionFilter === option.id ? 'is-filter-active' : ''}`}
+                    type="button"
+                    key={option.id}
+                    onClick={() => setExecutionFilter(option.id)}
+                    aria-pressed={executionFilter === option.id}
+                  >
+                    <span>{option.label}</span>
+                    <strong>{option.count}</strong>
+                    <small>{option.help}</small>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {executionRows.length === 0 ? (
@@ -1443,6 +1585,8 @@ function DocenteActividades() {
                   const todayIso = toLocalIsoDate(new Date());
                   const isOverdue = clase.estado === 'PLAN' && clase.fecha < todayIso;
                   const isTodayPending = clase.estado === 'PLAN' && clase.fecha === todayIso;
+                  const timingLabel = clase.estado === 'PLAN' ? getClassTimingLabel(clase.fecha, todayIso) : 'Registrada';
+                  const statusLabel = getClassStatusLabel(clase.estado);
 
                   return (
                   <article
@@ -1450,58 +1594,70 @@ function DocenteActividades() {
                     key={clase.id}
                   >
                     <header>
-                      <div>
-                        <h4>{clase.fecha}</h4>
-                        <p>{programaLookup.get(clase.programa) || `Programa ${clase.programa}`}</p>
+                      <div className="execution-date-block">
+                        <span className="execution-date-kicker">{timingLabel}</span>
+                        <h4>{formatClassDate(clase.fecha)}</h4>
+                        <p>
+                          {programaLookup.get(clase.programa) || `Programa ${clase.programa}`} ·{' '}
+                          {actividadesDeClase.length} actividades IP
+                        </p>
                       </div>
                       <div className="execution-header-badges">
                         {isOverdue ? <span className="state-pill state-attention">Vencida</span> : null}
                         {isTodayPending ? <span className="state-pill state-today">Hoy</span> : null}
                         <span className={`state-pill state-${clase.estado.toLowerCase()}`}>
-                          {clase.estado === 'PLAN' ? 'Planificada' : clase.estado === 'DICT' ? 'Dictada' : 'Suspendida'}
+                          {statusLabel}
                         </span>
                       </div>
                     </header>
 
                     <div className="execution-card-actions">
                       <button
-                        className="button button-small"
+                        className="button button-small execution-action-done"
                         type="button"
-                        disabled={updatingClassId === clase.id}
+                        disabled={updatingClassId === clase.id || clase.estado === 'DICT'}
                         onClick={() => handleUpdateClassStatus(clase, 'DICT')}
+                        title="Marca esta clase como dictada y conserva la observación escrita."
                       >
                         <CheckCircle2 size={14} />
-                        Se dicto
+                        Se dictó
                       </button>
+                      {clase.estado !== 'PLAN' ? (
+                        <button
+                          className="button button-ghost button-small execution-action-reopen"
+                          type="button"
+                          disabled={updatingClassId === clase.id}
+                          onClick={() => handleUpdateClassStatus(clase, 'PLAN')}
+                          title="Reabre la clase como planificada/pendiente si fue marcada por error."
+                        >
+                          <RotateCcw size={14} />
+                          Reabrir pendiente
+                        </button>
+                      ) : null}
                       <button
                         className="button button-ghost button-small"
                         type="button"
-                        disabled={updatingClassId === clase.id}
-                        onClick={() => handleUpdateClassStatus(clase, 'PLAN')}
-                      >
-                        <CalendarDays size={14} />
-                        Volver a plan
-                      </button>
-                      <button
-                        className="button button-ghost button-small"
-                        type="button"
-                        disabled={updatingClassId === clase.id}
+                        disabled={updatingClassId === clase.id || clase.estado === 'CANC'}
                         onClick={() => handleUpdateClassStatus(clase, 'CANC')}
+                        title="Marca esta clase como suspendida y conserva la observación escrita."
                       >
                         <AlertTriangle size={14} />
-                        Se suspendio
+                        Se suspendió
                       </button>
                     </div>
 
-                    <textarea
-                      className="input"
-                      rows={2}
-                      placeholder="Observaciones de la clase (ej. suspension por paro, cambio de aula, etc.)"
-                      value={classNotesDraft[clase.id] ?? clase.observaciones ?? ''}
-                      onChange={(event) =>
-                        setClassNotesDraft((prev) => ({ ...prev, [clase.id]: event.target.value }))
-                      }
-                    />
+                    <label className="execution-notes-field">
+                      <span>Observaciones</span>
+                      <textarea
+                        className="input"
+                        rows={2}
+                        placeholder="Ej. suspensión por paro, cambio de aula, recuperatorio, etc."
+                        value={classNotesDraft[clase.id] ?? clase.observaciones ?? ''}
+                        onChange={(event) =>
+                          setClassNotesDraft((prev) => ({ ...prev, [clase.id]: event.target.value }))
+                        }
+                      />
+                    </label>
 
                     <div className="form-actions" style={{ marginTop: '0.45rem' }}>
                       <button
@@ -1510,13 +1666,14 @@ function DocenteActividades() {
                         disabled={updatingClassId === clase.id}
                         onClick={() => handleSaveClassNote(clase)}
                       >
-                        Guardar observacion
+                        Guardar observación
                       </button>
                     </div>
 
                     <div className="execution-activity-list">
+                      <div className="execution-activity-list-header">Actividades IP de esta clase</div>
                       {actividadesDeClase.length === 0 ? (
-                        <span className="muted">No hay actividades IP asociadas a esta clase.</span>
+                        <span className="status-note status-note-neutral">No hay actividades IP asociadas a esta clase.</span>
                       ) : (
                         actividadesDeClase.map((actividad) => (
                           <div className="execution-activity-item" key={actividad.id}>

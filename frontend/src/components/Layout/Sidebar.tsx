@@ -11,10 +11,13 @@ import {
   Gauge,
   House,
   Layers,
+  Moon,
   School,
   Settings2,
+  Sun,
   UserCog,
 } from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme';
 
 interface NavLinkItem {
   label: string;
@@ -36,7 +39,7 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
       links: [{ to: '/docente/resumen', label: 'Inicio', icon: House }],
     },
     {
-      title: 'Planificacion docente',
+      title: 'Planificación docente',
       links: [
         {
           to: '/docente/programas',
@@ -44,7 +47,7 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
           icon: FolderKanban,
         },
         {
-          label: 'Planificacion',
+          label: 'Planificación',
           icon: ClipboardList,
           matchPrefixes: ['/docente/planificacion', '/docente/agenda-cursado', '/docente/dias-cursado'],
           children: [
@@ -79,11 +82,12 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
       links: [{ to: '/admin', label: 'Inicio', icon: House }],
     },
     {
-      title: 'Gestion',
+      title: 'Gestión',
       links: [
         { to: '/admin/programas', label: 'Programas', icon: BookOpen },
         { to: '/admin/actividades', label: 'Actividades', icon: ClipboardList },
         { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog },
+        { to: '/admin/asignaciones-docentes', label: 'Asignaciones docentes', icon: UserCog },
       ],
     },
     {
@@ -97,6 +101,8 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
         },
         { to: '/admin/unidades-academicas', label: 'Unidades académicas', icon: Layers },
         { to: '/admin/tipos-actividad', label: 'Tipos de actividad', icon: Settings2 },
+        { to: '/admin/planes-estudio', label: 'Planes de estudio', icon: BookOpen },
+        { to: '/admin/competencias', label: 'Competencias', icon: ClipboardList },
       ],
     },
     {
@@ -131,6 +137,7 @@ function Sidebar({ role }: SidebarProps) {
   const groups = useMemo(() => navConfig[role] || [], [role]);
   const roleLabel = role === 'admin' ? 'Portal Administrativo' : 'Portal Docente';
   const [toggledItems, setToggledItems] = useState<Record<string, boolean>>({});
+  const { theme, toggle } = useTheme();
 
   const expandedItems = useMemo(() => {
     const auto: Record<string, boolean> = {};
@@ -158,7 +165,7 @@ function Sidebar({ role }: SidebarProps) {
             className="brand-logo"
           />
           <div className="brand-copy">
-            <div className="brand-name">CRE app</div>
+            <div className="brand-name">CREApp</div>
             <div className="brand-tag">Planificación académica</div>
             <div className="sidebar-role">{roleLabel}</div>
           </div>
@@ -240,6 +247,17 @@ function Sidebar({ role }: SidebarProps) {
             </div>
           ))}
         </nav>
+      </div>
+
+      <div className="sidebar-theme-toggle">
+        <button className="theme-toggle-btn" type="button" onClick={toggle} aria-label="Cambiar tema">
+          <span className="theme-toggle-icon">
+            {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+          </span>
+          <span className="theme-toggle-label">
+            {theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}
+          </span>
+        </button>
       </div>
     </aside>
   );

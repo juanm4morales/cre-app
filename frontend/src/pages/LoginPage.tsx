@@ -62,12 +62,12 @@ function LoginPage() {
         <p className="eyebrow">CRE APP</p>
         <h1>Ingreso a la plataforma</h1>
         <p className="muted">
-          Accede para cargar programas, actividades y controlar los
+          Accedé para cargar programas, actividades y controlar los
           créditos.
         </p>
         <form className="auth-form" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label className="muted" htmlFor="username-input">Usuario</label>
+            <label htmlFor="username-input">Usuario</label>
             <input
               id="username-input"
               className={`input ${errors.username ? 'input-error' : ''}`}
@@ -85,7 +85,7 @@ function LoginPage() {
             )}
           </div>
           <div>
-            <label className="muted" htmlFor="password-input">Contraseña</label>
+            <label htmlFor="password-input">Contraseña</label>
             <input
               id="password-input"
               className={`input ${errors.password ? 'input-error' : ''}`}

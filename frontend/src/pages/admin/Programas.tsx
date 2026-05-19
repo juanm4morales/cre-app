@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
+import { toast } from 'sonner';
 
 interface Programa {
   id: number;
@@ -18,10 +19,14 @@ interface PaginatedResponse<T> {
 function AdminProgramas() {
   const [selected, setSelected] = useState<Programa | null>(null);
 
-  const { data: programas = [] } = useQuery({
+  const { data: programas = [], isLoading, isError } = useQuery({
     queryKey: ['programas'],
     queryFn: () => api.get<PaginatedResponse<Programa>>('/programas').then(res => res.data.results),
   });
+
+  useEffect(() => {
+    if (isError) toast.error('No se pudieron cargar los datos.');
+  }, [isError]);
 
   const rows = programas.map((programa) => ({
     id: String(programa.id),
@@ -37,19 +42,37 @@ function AdminProgramas() {
     ],
   }));
 
+  if (isLoading) {
+    return (
+      <>
+        <section className="page-header">
+          <div>
+            <p className="eyebrow">Gestión admin</p>
+            <h2>Programas</h2>
+            <p>Valida programas y deja observaciones para el docente.</p>
+          </div>
+          <span className="pill">Filtros próximamente</span>
+        </section>
+        <SectionCard title="Listado de programas">
+          <p className="muted">Cargando datos...</p>
+        </SectionCard>
+      </>
+    );
+  }
+
   return (
     <>
       <section className="page-header">
         <div>
-          <p className="eyebrow">Gestion admin</p>
+          <p className="eyebrow">Gestión admin</p>
           <h2>Programas</h2>
           <p>Valida programas y deja observaciones para el docente.</p>
         </div>
-        <span className="pill">Filtros proximamente</span>
+        <span className="pill">Filtros próximamente</span>
       </section>
 
       <SectionCard title="Listado de programas">
-        <BasicTable columns={['Programa', 'Anio', 'Plan EC', 'Acciones']} rows={rows} />
+        <BasicTable columns={['Programa', 'Anio', 'Plan EC', 'Acciones']} rows={rows} pageSize={10} />
       </SectionCard>
 
       {selected ? (

@@ -134,6 +134,7 @@ function AdminDashboard() {
           <BasicTable
             columns={['Programa', 'Año', 'Actividades', 'Estado']}
             rows={tableRows}
+            pageSize={8}
           />
         )}
       </SectionCard>

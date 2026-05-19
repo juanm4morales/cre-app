@@ -1,14 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 import SectionCard from '../../components/Common/SectionCard';
 import PlanningActivityCommonFields from '../../components/Forms/PlanningActivityCommonFields';
 import PlanningCalendar from '../../components/Forms/PlanningCalendar';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
+
+const ipActivitySchema = z.object({
+  tipo_actividad: z.string().min(1, 'Seleccioná un tipo de actividad'),
+  descripcion: z.string().min(1, 'La descripción es requerida'),
+  minutos: z.string()
+    .min(1, 'Ingresa una duración en minutos')
+    .refine((value) => Number(value) > 0, 'Ingresa una duración mayor a 0'),
+  modalidad_trabajo: z.enum(['IND', 'EQU']),
+  unidad_ids: z.array(z.number()).min(1, 'Seleccioná al menos una unidad'),
+});
+
+type IPActivityFormValues = z.infer<typeof ipActivitySchema>;
+
+const defaultIPActivityValues: IPActivityFormValues = {
+  tipo_actividad: '',
+  descripcion: '',
+  minutos: '',
+  modalidad_trabajo: 'IND',
+  unidad_ids: [],
+};
 
 interface PaginatedResponse<T> {
   results: T[];
@@ -59,69 +82,74 @@ function normalizeCollection<T>(data: PaginatedResponse<T> | T[] | null | undefi
 }
 
 function DocentePlanificacionIP() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const currentYear = new Date().getFullYear();
-  const now = new Date();
 
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [programas, setProgramas] = useState<Programa[]>([]);
-  const [tipos, setTipos] = useState<TipoActividad[]>([]);
-  const [unidades, setUnidades] = useState<Unidad[]>([]);
-  const [clases, setClases] = useState<ClaseCalendario[]>([]);
-  const [actividades, setActividades] = useState<Actividad[]>([]);
-  const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [selectedClassId, setSelectedClassId] = useState<number | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
 
-  const [formState, setFormState] = useState({
-    tipo_actividad: '',
-    descripcion: '',
-    minutos: '',
-    modalidad_trabajo: 'IND' as 'IND' | 'EQU',
-    unidad_ids: [] as number[],
+  const queryEnabled = Boolean(selectedPlanEcId);
+
+  const programasQuery = useQuery({
+    queryKey: ['programas', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Programa>>('/programas', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
   });
 
-  const loadData = useCallback(async (background = false) => {
-    if (!selectedPlanEcId) {
-      setLoading(false);
-      return;
-    }
+  const tiposQuery = useQuery({
+    queryKey: ['tipos-actividad'],
+    queryFn: () => api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad').then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-    if (!background) {
-      setLoading(true);
-    }
+  const unidadesQuery = useQuery({
+    queryKey: ['unidades', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Unidad>>('/unidades', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-    try {
-      const [programaRes, tiposRes, unidadesRes, clasesRes, actividadesRes] = await Promise.all([
-        api.get<PaginatedResponse<Programa>>('/programas', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-        api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad'),
-        api.get<PaginatedResponse<Unidad>>('/unidades', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-        api.get<PaginatedResponse<ClaseCalendario>>('/clases-calendario', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-        api.get<PaginatedResponse<Actividad>>('/actividades', { params: { plan_estudio_ec_id: selectedPlanEcId } }),
-      ]);
+  const clasesQuery = useQuery({
+    queryKey: ['clases-calendario', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<ClaseCalendario>>('/clases-calendario', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-      setProgramas(normalizeCollection(programaRes.data));
-      setTipos(normalizeCollection(tiposRes.data));
-      setUnidades(normalizeCollection(unidadesRes.data));
-      setClases(normalizeCollection(clasesRes.data));
-      setActividades(normalizeCollection(actividadesRes.data));
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo cargar la planificación IP.'));
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, [selectedPlanEcId]);
+  const actividadesQuery = useQuery({
+    queryKey: ['actividades', selectedPlanEcId],
+    queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades', { params: { plan_estudio_ec_id: selectedPlanEcId } }).then((r) => normalizeCollection(r.data)),
+    enabled: queryEnabled,
+  });
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const programas = useMemo(() => programasQuery.data ?? [], [programasQuery.data]);
+  const tipos = useMemo(() => tiposQuery.data ?? [], [tiposQuery.data]);
+  const unidades = useMemo(() => unidadesQuery.data ?? [], [unidadesQuery.data]);
+  const clases = useMemo(() => clasesQuery.data ?? [], [clasesQuery.data]);
+  const actividades = useMemo(() => actividadesQuery.data ?? [], [actividadesQuery.data]);
 
-  useApiAutoRefresh(() => loadData(true), [selectedPlanEcId], { enabled: Boolean(selectedPlanEcId) });
+  const loading = queryEnabled && (
+    programasQuery.isLoading || tiposQuery.isLoading || unidadesQuery.isLoading || clasesQuery.isLoading || actividadesQuery.isLoading
+  );
+
+  const {
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<IPActivityFormValues>({
+    resolver: zodResolver(ipActivitySchema),
+    defaultValues: defaultIPActivityValues,
+  });
+
+  const tipoActividadValue = watch('tipo_actividad');
+  const minutosValue = watch('minutos');
+  const modalidadTrabajoValue = watch('modalidad_trabajo');
+  const unidadIdsValue = watch('unidad_ids');
+  const descripcionValue = watch('descripcion');
 
   const programaActual = useMemo(
     () => programas.find((programa) => programa.anio_academico === currentYear) || null,
@@ -131,14 +159,12 @@ function DocentePlanificacionIP() {
   const tiposIP = useMemo(() => tipos.filter((tipo) => tipo.tipo_dedicacion === 'IP'), [tipos]);
 
   useEffect(() => {
-    if (!formState.tipo_actividad && tiposIP.length > 0) {
+    if (!tipoActividadValue && tiposIP.length > 0) {
       const defaultTipo = tiposIP[0];
-      if (!defaultTipo) {
-        return;
-      }
-      setFormState((prev) => ({ ...prev, tipo_actividad: String(defaultTipo.id) }));
+      if (!defaultTipo) return;
+      setValue('tipo_actividad', String(defaultTipo.id));
     }
-  }, [formState.tipo_actividad, tiposIP]);
+  }, [setValue, tipoActividadValue, tiposIP]);
 
   const unidadesProgramaActual = useMemo(() => {
     if (!programaActual) return [];
@@ -194,11 +220,9 @@ function DocentePlanificacionIP() {
     setSelectedClassId(clase.id);
   };
 
-  const handleCreateActividadIP = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const handleCreateActividadIP = async (values: IPActivityFormValues) => {
     if (!programaActual || !selectedClassId) {
-      toast.error('Selecciona una clase del calendario para cargar actividad IP.');
+      toast.error('Seleccioná una clase del calendario para cargar actividad IP.');
       return;
     }
 
@@ -207,43 +231,32 @@ function DocentePlanificacionIP() {
       return;
     }
 
-    const minutos = Number(formState.minutos);
-    if (!Number.isFinite(minutos) || minutos <= 0) {
-      toast.error('Ingresa una duración en minutos mayor a 0.');
-      return;
-    }
-
-    if (formState.unidad_ids.length === 0) {
-      toast.error('Selecciona al menos una unidad.');
-      return;
-    }
-
-    setSaving(true);
+    const minutos = Number(values.minutos);
     try {
-      const response = await api.post<Actividad>('/actividades', {
+      await api.post<Actividad>('/actividades', {
         programa: programaActual.id,
-        tipo_actividad: Number(formState.tipo_actividad),
-        descripcion: formState.descripcion,
+        tipo_actividad: Number(values.tipo_actividad),
+        descripcion: values.descripcion,
         horas: Number((minutos / 60).toFixed(2)),
-        modalidad_trabajo: formState.modalidad_trabajo,
-        unidad_ids: formState.unidad_ids,
+        modalidad_trabajo: values.modalidad_trabajo,
+        unidad_ids: values.unidad_ids,
         clase_calendario: selectedClassId,
         fecha_inicio_ta: null,
         fecha_fin_ta: null,
       });
 
-      setActividades((prev) => [response.data, ...prev]);
-      setFormState((prev) => ({
-        ...prev,
+      queryClient.invalidateQueries({ queryKey: ['actividades', selectedPlanEcId] });
+      reset({
+        ...defaultIPActivityValues,
+        tipo_actividad: values.tipo_actividad,
+        modalidad_trabajo: values.modalidad_trabajo,
         descripcion: '',
         minutos: '',
         unidad_ids: [],
-      }));
+      });
       toast.success('Actividad IP creada.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo crear la actividad IP.'));
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -253,7 +266,7 @@ function DocentePlanificacionIP() {
 
     try {
       await api.delete(`/actividades/${actividadId}`);
-      setActividades((prev) => prev.filter((actividad) => actividad.id !== actividadId));
+      queryClient.invalidateQueries({ queryKey: ['actividades', selectedPlanEcId] });
       toast.success('Actividad dada de baja.');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo dar de baja la actividad.'));
@@ -263,7 +276,7 @@ function DocentePlanificacionIP() {
   if (!selectedPlanEcId) {
     return (
       <SectionCard title="Selección de espacio curricular">
-        <p className="muted">Selecciona un espacio curricular desde la barra superior.</p>
+        <p className="muted">Seleccioná un espacio curricular desde la barra superior.</p>
       </SectionCard>
     );
   }
@@ -310,7 +323,7 @@ function DocentePlanificacionIP() {
         <div>
           <p className="eyebrow">Planificación</p>
           <h2>{selectedEspacioNombre || 'Espacio curricular'} | IP</h2>
-          <p>Selecciona una clase existente y registra la actividad directamente sobre esa fecha.</p>
+          <p>Seleccioná una clase existente y registra la actividad directamente sobre esa fecha.</p>
         </div>
         <div className="docente-hero-actions">
           <Link className="button button-ghost" to="/docente/planificacion-ta">
@@ -351,8 +364,12 @@ function DocentePlanificacionIP() {
       <div className="planning-split">
         <SectionCard title="Calendario de clases">
           {clasesProgramaActual.length === 0 ? (
-            <div className="status-note status-note-neutral">
-              Aún no hay clases generadas para este programa. Configura días de cursado y luego vuelve a esta pantalla.
+            <div className="generate-calendar-box">
+              <p className="muted">
+                Aún no hay clases generadas para este programa.
+                {' '}Andá a <Link to="/docente/agenda-cursado">Agenda de cursado</Link> para
+                configurar los días y generar el calendario.
+              </p>
             </div>
           ) : null}
 
@@ -369,6 +386,11 @@ function DocentePlanificacionIP() {
               return {
                 className: `${clase ? 'has-class' : ''} ${isSelected ? 'is-selected' : ''}`.trim(),
                 title: clase ? 'Seleccionar clase del día' : 'Sin clase registrada para ese día',
+                ariaLabel: clase
+                  ? `${isoDate}: clase registrada${hasActivities ? ' con actividades IP cargadas' : ''}`
+                  : `${isoDate}: sin clase registrada`,
+                ariaSelected: isSelected,
+                disabled: !clase,
                 showIcon: Boolean(clase),
                 badge: hasActivities ? <span className="table-row-pill">IP</span> : null,
               };
@@ -388,28 +410,36 @@ function DocentePlanificacionIP() {
         </SectionCard>
 
         <SectionCard title="Nueva actividad IP">
-          <form className="form-grid-full planning-sticky-form" onSubmit={handleCreateActividadIP}>
+          <form className="form-grid-full planning-sticky-form" onSubmit={handleSubmit(handleCreateActividadIP)}>
             <div className={selectedClass ? 'status-note' : 'status-note status-note-neutral'}>
               {selectedClass
                 ? `Clase lista para planificar: ${selectedClass.fecha}.`
-                : 'Selecciona una fecha con clase en el calendario para habilitar la carga.'}
+                : 'Seleccioná una fecha con clase en el calendario para habilitar la carga.'}
             </div>
             <PlanningActivityCommonFields
+              idPrefix="planificacion-ip"
               tipos={tiposIP}
-              tipoActividad={formState.tipo_actividad}
-              minutos={formState.minutos}
-              modalidadTrabajo={formState.modalidad_trabajo}
-              unidadIds={formState.unidad_ids}
-              descripcion={formState.descripcion}
-              onTipoActividadChange={(value) => setFormState((prev) => ({ ...prev, tipo_actividad: value }))}
-              onMinutosChange={(value) => setFormState((prev) => ({ ...prev, minutos: value }))}
-              onModalidadTrabajoChange={(value) => setFormState((prev) => ({ ...prev, modalidad_trabajo: value }))}
-              onUnidadIdsChange={(value) => setFormState((prev) => ({ ...prev, unidad_ids: value }))}
-              onDescripcionChange={(value) => setFormState((prev) => ({ ...prev, descripcion: value }))}
+              tipoActividad={tipoActividadValue}
+              minutos={minutosValue}
+              modalidadTrabajo={modalidadTrabajoValue}
+              unidadIds={unidadIdsValue}
+              descripcion={descripcionValue}
+              onTipoActividadChange={(value) => setValue('tipo_actividad', value, { shouldDirty: true, shouldValidate: true })}
+              onMinutosChange={(value) => setValue('minutos', value, { shouldDirty: true, shouldValidate: true })}
+              onModalidadTrabajoChange={(value) => setValue('modalidad_trabajo', value, { shouldDirty: true, shouldValidate: true })}
+              onUnidadIdsChange={(value) => setValue('unidad_ids', value, { shouldDirty: true, shouldValidate: true })}
+              onDescripcionChange={(value) => setValue('descripcion', value, { shouldDirty: true, shouldValidate: true })}
               unidades={unidadesProgramaActual}
+              errors={{
+                tipoActividad: errors.tipo_actividad?.message,
+                minutos: errors.minutos?.message,
+                modalidadTrabajo: errors.modalidad_trabajo?.message,
+                unidadIds: errors.unidad_ids?.message,
+                descripcion: errors.descripcion?.message,
+              }}
             />
-            <button className="button" type="submit" disabled={saving || !selectedClassId || tiposIP.length === 0}>
-              {saving ? 'Guardando...' : 'Crear actividad IP'}
+            <button className="button" type="submit" disabled={isSubmitting || !selectedClassId || tiposIP.length === 0}>
+              {isSubmitting ? 'Guardando...' : 'Crear actividad IP'}
             </button>
           </form>
         </SectionCard>
@@ -419,7 +449,7 @@ function DocentePlanificacionIP() {
         {rows.length === 0 ? (
           <p className="muted">Aún no hay actividades IP cargadas.</p>
         ) : (
-          <BasicTable columns={['Actividad', 'Duración', 'Modalidad', 'Fecha clase', 'Acciones']} rows={rows} />
+          <BasicTable columns={['Actividad', 'Duración', 'Modalidad', 'Fecha clase', 'Acciones']} rows={rows} pageSize={10} />
         )}
       </SectionCard>
     </>

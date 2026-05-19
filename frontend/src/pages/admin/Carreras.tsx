@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import SectionCard from '../../components/Common/SectionCard';
-import BasicTable from '../../components/Tables/BasicTable';
+import AdminCrudPage from '../../components/Admin/AdminCrudPage';
+import type { CrudField, ColumnConfig, DetailField } from '../../components/Admin/AdminCrudPage';
 import api from '../../services/api';
 
 interface Carrera {
   id: number;
-  nombre: string;
   codigo: string;
-  unidad_academica: number;
+  nombre: string;
   nivel: string;
+  unidad_academica: number;
 }
 
 interface UnidadAcademica {
@@ -22,78 +22,90 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
+const NIVEL_OPTIONS = [
+  { value: 'PG', label: 'PG - Pregrado' },
+  { value: 'G', label: 'G - Grado' },
+];
+
 function AdminCarreras() {
-  const [selected, setSelected] = useState<Carrera | null>(null);
-
-  const { data: carreras = [] } = useQuery({
-    queryKey: ['carreras'],
-    queryFn: () => api.get<PaginatedResponse<Carrera>>('/carreras').then(res => res.data.results),
-  });
-
   const { data: unidades = [] } = useQuery({
     queryKey: ['unidades-academicas'],
-    queryFn: () => api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas').then(res => res.data.results),
+    queryFn: () =>
+      api.get<PaginatedResponse<UnidadAcademica>>('/unidades-academicas').then(res => res.data.results),
   });
 
-  const unidadLookup = new Map(unidades.map((unidad) => [unidad.id, unidad.sigla]));
+  const unidadOptions = useMemo(
+    () =>
+      unidades.map(u => ({
+        value: u.id,
+        label: `${u.sigla} - ${u.nombre}`,
+      })),
+    [unidades],
+  );
 
-  const rows = carreras.map((carrera) => ({
-    id: String(carrera.id),
-    cells: [
-      carrera.codigo,
-      carrera.nombre,
-      carrera.nivel,
-      unidadLookup.get(carrera.unidad_academica) || `UA ${carrera.unidad_academica}`,
-      <div className="table-actions" key={`actions-${carrera.id}`}>
-        <button className="button button-ghost button-small" type="button" onClick={() => setSelected(carrera)}>
-          Ver
-        </button>
-      </div>,
-    ],
-  }));
+  const unidadLookup = useMemo(
+    () => new Map(unidades.map(u => [u.id, u.sigla])),
+    [unidades],
+  );
+
+  const fields: CrudField[] = [
+    { name: 'codigo', label: 'Código', type: 'text', required: true },
+    { name: 'nombre', label: 'Nombre', type: 'text', required: true },
+    {
+      name: 'nivel',
+      label: 'Nivel',
+      type: 'select',
+      required: true,
+      options: NIVEL_OPTIONS,
+    },
+    {
+      name: 'unidad_academica',
+      label: 'Unidad académica',
+      type: 'select',
+      required: true,
+      valueType: 'number',
+      options: unidadOptions,
+    },
+  ];
+
+  const columns: ColumnConfig<Carrera>[] = [
+    { header: 'Código', render: (item) => item.codigo },
+    { header: 'Carrera', render: (item) => item.nombre },
+    { header: 'Nivel', render: (item) => item.nivel },
+    {
+      header: 'Unidad',
+      render: (item) => unidadLookup.get(item.unidad_academica) || `UA ${item.unidad_academica}`,
+    },
+  ];
+
+  const detailFields: DetailField<Carrera>[] = [
+    { label: 'Código', render: (item) => item.codigo },
+    { label: 'Nombre', render: (item) => item.nombre },
+    { label: 'Nivel', render: (item) => item.nivel },
+    {
+      label: 'Unidad académica',
+      render: (item) => unidadLookup.get(item.unidad_academica) || `UA ${item.unidad_academica}`,
+    },
+  ];
 
   return (
-    <>
-      <section className="page-header">
-        <div>
-          <p className="eyebrow">Gestion academica</p>
-          <h2>Carreras</h2>
-          <p>Listado de carreras vinculadas a la facultad.</p>
-        </div>
-      </section>
-
-      <SectionCard title="Listado de carreras">
-        <BasicTable columns={['Codigo', 'Carrera', 'Nivel', 'Unidad', 'Acciones']} rows={rows} />
-      </SectionCard>
-
-      {selected ? (
-        <SectionCard title="Detalle de carrera">
-          <div className="detail-grid">
-            <div>
-              <p className="eyebrow">Codigo</p>
-              <div>{selected.codigo}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Nombre</p>
-              <div>{selected.nombre}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Nivel</p>
-              <div>{selected.nivel}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Unidad academica</p>
-              <div>{unidadLookup.get(selected.unidad_academica) || `UA ${selected.unidad_academica}`}</div>
-            </div>
-          </div>
-          <div className="form-actions mt-3">
-            <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
-              Cerrar
-            </button>
-          </div>
-        </SectionCard>
-      ) : null}
-    </>
+    <AdminCrudPage
+      endpoint="/carreras"
+      title="Carreras"
+      eyebrow="Gestión académica"
+      description="Administración de carreras vinculadas a la facultad."
+      fields={fields}
+      defaultValues={{ codigo: '', nombre: '', nivel: '', unidad_academica: '' }}
+      columns={columns}
+      detailFields={detailFields}
+      newButtonText="Nueva carrera"
+      createTitle="Nueva carrera"
+      editTitle="Editar carrera"
+      detailTitle="Detalle de carrera"
+      tableTitle="Listado de carreras"
+      deleteTitle="Confirmar eliminación"
+      deleteMessage="¿Estás seguro de que deseas eliminar esta carrera? Esta acción no se puede deshacer."
+    />
   );
 }
 

@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import BasicTable from '../../components/Tables/BasicTable';
 import api from '../../services/api';
+import { toast } from 'sonner';
 
 interface Actividad {
   id: number;
@@ -29,7 +30,7 @@ interface PaginatedResponse<T> {
 function AdminActividades() {
   const [selected, setSelected] = useState<Actividad | null>(null);
 
-  const { data: actividades = [] } = useQuery({
+  const { data: actividades = [], isLoading, isError } = useQuery({
     queryKey: ['actividades'],
     queryFn: () => api.get<PaginatedResponse<Actividad>>('/actividades').then(res => res.data.results),
   });
@@ -43,6 +44,10 @@ function AdminActividades() {
     queryKey: ['tipos-actividad'],
     queryFn: () => api.get<PaginatedResponse<TipoActividad>>('/tipos-actividad').then(res => res.data.results),
   });
+
+  useEffect(() => {
+    if (isError) toast.error('No se pudieron cargar los datos.');
+  }, [isError]);
 
   const programaLookup = useMemo(() => {
     const map = new Map<number, string>();
@@ -73,11 +78,28 @@ function AdminActividades() {
     ],
   }));
 
+  if (isLoading) {
+    return (
+      <>
+        <section className="page-header">
+          <div>
+            <p className="eyebrow">Gestión admin</p>
+            <h2>Actividades</h2>
+            <p>Control global de horas IP/TA cargadas por docentes.</p>
+          </div>
+        </section>
+        <SectionCard title="Listado de actividades">
+          <p className="muted">Cargando datos...</p>
+        </SectionCard>
+      </>
+    );
+  }
+
   return (
     <>
       <section className="page-header">
         <div>
-          <p className="eyebrow">Gestion admin</p>
+          <p className="eyebrow">Gestión admin</p>
           <h2>Actividades</h2>
           <p>Control global de horas IP/TA cargadas por docentes.</p>
         </div>
@@ -87,6 +109,7 @@ function AdminActividades() {
         <BasicTable
           columns={['Actividad', 'Tipo', 'Horas', 'Programa', 'Acciones']}
           rows={rows}
+          pageSize={10}
         />
       </SectionCard>
 

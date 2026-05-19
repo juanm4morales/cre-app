@@ -190,6 +190,7 @@ function DocenteDashboard() {
           <BasicTable
             columns={['Espacio curricular', 'Año', 'Actividades', 'Horas', 'Estado']}
             rows={tableRows}
+            pageSize={8}
           />
         )}
       </SectionCard>

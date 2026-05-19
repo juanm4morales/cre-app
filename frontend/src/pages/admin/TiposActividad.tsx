@@ -182,9 +182,9 @@ function AdminTiposActividad() {
 
       <section className="page-header">
         <div>
-          <p className="eyebrow">Gestion academica</p>
+          <p className="eyebrow">Gestión académica</p>
           <h2>Tipos de actividad</h2>
-          <p>Configura categorias y dedicaciones disponibles para docentes.</p>
+          <p>Configurá categorías y dedicaciones disponibles para docentes.</p>
         </div>
         <button
           className="button"
@@ -266,6 +266,7 @@ function AdminTiposActividad() {
         <BasicTable
           columns={['Nombre', 'Dedicacion', 'Modalidad', 'Descripcion', 'Acciones']}
           rows={rows}
+          pageSize={10}
         />
       </SectionCard>
 

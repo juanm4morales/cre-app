@@ -13,7 +13,7 @@ import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
 
 const programaSchema = z.object({
-  plan_estudio_ec: z.string().min(1, 'Selecciona un plan de estudio'),
+  plan_estudio_ec: z.string().min(1, 'Seleccioná un plan de estudio'),
   anio_academico: z.number().min(2000, 'Año inválido'),
   descripcion: z.string().optional(),
 });
@@ -507,7 +507,7 @@ function DocenteProgramas() {
                 </div>
               </form>
 
-              <div className="unidades-competencias-grid mt-2">
+              <div className="unidades-competencias-grid">
                 {unidades.filter((u) => u.programa === editing.id).length === 0 ? (
                   <span className="chip">Aún no hay unidades cargadas.</span>
                 ) : (
@@ -570,7 +570,7 @@ function DocenteProgramas() {
   // Vista de lista principal
   if (!selectedPlanEcId) {
     return (
-      <SectionCard title="Seleccion de espacio curricular">
+      <SectionCard title="Selección de espacio curricular">
         <p className="muted">
           Usa el desplegable superior para elegir un espacio curricular y comenzar a cargar programas.
         </p>
@@ -691,6 +691,7 @@ function DocenteProgramas() {
           <BasicTable
             columns={['Espacio curricular', 'Año', 'Descripción', 'Acciones']}
             rows={rows}
+            pageSize={10}
           />
         )}
       </SectionCard>

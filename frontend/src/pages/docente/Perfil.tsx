@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import SectionCard from '../../components/Common/SectionCard';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import { getApiErrorMessage } from '../../utils/errors';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface ProfileData {
   username: string;
@@ -18,27 +16,13 @@ interface ProfileData {
 
 function DocentePerfil() {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<ProfileData>({
-    username: '',
-    first_name: '',
-    last_name: '',
-    name: user?.name || '',
-    email: '',
-    role: user?.role || '',
-    telefono: '',
-  });
 
-  const loadProfile = useCallback(async (background = false) => {
-    if (!background) {
-      setLoading(true);
-    }
-
-    try {
+  const { data: profile, isLoading: loading } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: async () => {
       const response = await api.get('/auth/me');
       const data = response.data || {};
-
-      setProfile({
+      return {
         username: data.username || '',
         first_name: data.first_name || '',
         last_name: data.last_name || '',
@@ -46,29 +30,17 @@ function DocentePerfil() {
         email: data.email || '',
         role: data.role || user?.role || '',
         telefono: data.telefono || data.phone || '',
-      });
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudo cargar la información del perfil.'));
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, [user?.name, user?.role]);
-
-  useEffect(() => {
-    void loadProfile();
-  }, [loadProfile]);
-
-  useApiAutoRefresh(() => loadProfile(true), [user?.name, user?.role]);
+      } satisfies ProfileData;
+    },
+    meta: { errorMessage: 'No se pudo cargar la información del perfil.' },
+  });
 
   const fullName = useMemo(() => {
+    if (!profile) return user?.name || 'Usuario';
     const fromParts = `${profile.first_name} ${profile.last_name}`.trim();
-    if (fromParts) {
-      return fromParts;
-    }
+    if (fromParts) return fromParts;
     return profile.name || 'Usuario';
-  }, [profile.first_name, profile.last_name, profile.name]);
+  }, [profile, user?.name]);
 
   return (
     <>
@@ -97,7 +69,7 @@ function DocentePerfil() {
             <input
               id="perfil-username"
               className="input"
-              value={profile.username || 'Sin dato'}
+              value={profile?.username || 'Sin dato'}
               readOnly
             />
 
@@ -105,7 +77,7 @@ function DocentePerfil() {
             <input
               id="perfil-email"
               className="input"
-              value={profile.email || 'Sin dato'}
+              value={profile?.email || 'Sin dato'}
               readOnly
             />
 
@@ -113,7 +85,7 @@ function DocentePerfil() {
             <input
               id="perfil-rol"
               className="input"
-              value={profile.role || 'Sin dato'}
+              value={profile?.role || 'Sin dato'}
               readOnly
             />
 
@@ -121,7 +93,7 @@ function DocentePerfil() {
             <input
               id="perfil-telefono"
               className="input"
-              value={profile.telefono || ''}
+              value={profile?.telefono || ''}
               placeholder="Próximamente editable"
               readOnly
             />

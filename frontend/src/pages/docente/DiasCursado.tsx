@@ -10,6 +10,13 @@ import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
 import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
+interface CalendarGenerateResponse {
+  programa_id: number;
+  created: number;
+  updated: number;
+  skipped: number;
+}
+
 const diaClaseSchema = z.object({
   dia_semana: z.number().int().min(0).max(6, 'Día inválido'),
   hora_inicio: z.string().optional(),
@@ -48,10 +55,10 @@ interface PaginatedResponse<T> {
 const DIAS_SEMANA = [
   { value: 0, label: 'Lunes' },
   { value: 1, label: 'Martes' },
-  { value: 2, label: 'Miercoles' },
+  { value: 2, label: 'Miércoles' },
   { value: 3, label: 'Jueves' },
   { value: 4, label: 'Viernes' },
-  { value: 5, label: 'Sabado' },
+  { value: 5, label: 'Sábado' },
   { value: 6, label: 'Domingo' },
 ];
 
@@ -62,6 +69,13 @@ function DocenteDiasCursado() {
   const [creatingPrograma, setCreatingPrograma] = useState(false);
   const [programas, setProgramas] = useState<Programa[]>([]);
   const [diasClase, setDiasClase] = useState<DiaClase[]>([]);
+
+  const [calendarGenerateState, setCalendarGenerateState] = useState({
+    fecha_desde: `${currentYear}-03-01`,
+    fecha_hasta: `${currentYear}-11-30`,
+    sobrescribir: false,
+    loading: false,
+  });
 
   const {
     register,
@@ -112,7 +126,7 @@ function DocenteDiasCursado() {
       setProgramas(programaRes.data.results);
       setDiasClase(diasRes.data.results);
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudieron cargar los dias de cursado.'));
+      toast.error(getApiErrorMessage(error, 'No se pudieron cargar los días de cursado.'));
     } finally {
       if (!background) {
         setLoading(false);
@@ -133,9 +147,9 @@ function DocenteDiasCursado() {
 
   if (!selectedPlanEcId) {
     return (
-      <SectionCard title="Seleccion de espacio curricular">
+      <SectionCard title="Selección de espacio curricular">
         <p className="muted">
-          Usa el desplegable superior para elegir un espacio curricular y configurar sus dias de cursado.
+          Usa el desplegable superior para elegir un espacio curricular y configurar sus días de cursado.
         </p>
       </SectionCard>
     );
@@ -150,7 +164,7 @@ function DocenteDiasCursado() {
         plan_estudio_ec_id: Number(selectedPlanEcId),
       });
       await loadData();
-      toast.success(`Programa ${currentYear} listo para configurar dias de cursado.`);
+      toast.success(`Programa ${currentYear} listo para configurar días de cursado.`);
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo crear o verificar el programa actual.'));
     } finally {
@@ -191,6 +205,34 @@ function DocenteDiasCursado() {
     }
   };
 
+  const handleGenerateCalendarRange = async () => {
+    if (!programaActual) {
+      toast.error('Debes tener programa del año actual.');
+      return;
+    }
+    if (!calendarGenerateState.fecha_desde || !calendarGenerateState.fecha_hasta) {
+      toast.error('Debes indicar fecha desde y fecha hasta.');
+      return;
+    }
+
+    setCalendarGenerateState((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await api.post<CalendarGenerateResponse>('/clases-calendario/generar-rango', {
+        programa_id: programaActual.id,
+        fecha_desde: calendarGenerateState.fecha_desde,
+        fecha_hasta: calendarGenerateState.fecha_hasta,
+        sobrescribir: calendarGenerateState.sobrescribir,
+      });
+
+      const { created, updated, skipped } = response.data;
+      toast.success(`Calendario generado: ${created} nuevas, ${updated} actualizadas, ${skipped} omitidas.`);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'No se pudo generar el calendario por rango.'));
+    } finally {
+      setCalendarGenerateState((prev) => ({ ...prev, loading: false }));
+    }
+  };
+
   const formatDiaLabel = (diaSemana: number) => {
     return DIAS_SEMANA.find((item) => item.value === diaSemana)?.label || `Dia ${diaSemana}`;
   };
@@ -207,13 +249,13 @@ function DocenteDiasCursado() {
     <>
       <section className="page-header">
         <div>
-          <p className="eyebrow">Programacion semanal</p>
+          <p className="eyebrow">Programación semanal</p>
           <h2>Agenda de cursado</h2>
           <p>{selectedEspacioNombre || 'Espacio curricular seleccionado'}</p>
         </div>
         {programaActual ? (
           <button className="button" type="button" onClick={() => navigate('/docente/planificacion')}>
-            Ir a planificacion IP
+            Ir a planificación IP
           </button>
         ) : null}
       </section>
@@ -236,7 +278,7 @@ function DocenteDiasCursado() {
         ) : (
           <>
             <p className="muted mt-0">
-              Configura aqui los dias y franjas horarias de clase que se usaran luego en la planificacion IP.
+              Configurá aquí los días y franjas horarias de clase que se usarán luego en la planificación IP.
             </p>
 
             <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
@@ -309,6 +351,57 @@ function DocenteDiasCursado() {
                   </div>
                 ))
               )}
+            </div>
+
+            <hr className="divider mt-4" />
+
+            <div className="generate-calendar-box">
+              <p className="muted mb-2">
+                Generá las clases del calendario a partir de los bloques semanales configurados arriba.
+                Esto crea una fecha concreta por cada bloque semanal dentro del rango indicado.
+              </p>
+              <div className="form-row">
+                <label className="grid-label">
+                  <span className="muted">Desde</span>
+                  <input
+                    className="input"
+                    type="date"
+                    value={calendarGenerateState.fecha_desde}
+                    onChange={(event) =>
+                      setCalendarGenerateState((prev) => ({ ...prev, fecha_desde: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="grid-label">
+                  <span className="muted">Hasta</span>
+                  <input
+                    className="input"
+                    type="date"
+                    value={calendarGenerateState.fecha_hasta}
+                    onChange={(event) =>
+                      setCalendarGenerateState((prev) => ({ ...prev, fecha_hasta: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="muted flex-row gap-1">
+                  <input
+                    type="checkbox"
+                    checked={calendarGenerateState.sobrescribir}
+                    onChange={(event) =>
+                      setCalendarGenerateState((prev) => ({ ...prev, sobrescribir: event.target.checked }))
+                    }
+                  />
+                  Actualizar clases ya existentes
+                </label>
+                <button
+                  className="button"
+                  type="button"
+                  onClick={handleGenerateCalendarRange}
+                  disabled={calendarGenerateState.loading}
+                >
+                  {calendarGenerateState.loading ? 'Generando...' : 'Generar calendario'}
+                </button>
+              </div>
             </div>
           </>
         )}

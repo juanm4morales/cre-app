@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
 import api from '../../services/api';
-import { getApiErrorMessage } from '../../utils/errors';
-import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 interface EspacioCurricular {
   id: number;
@@ -29,59 +28,43 @@ function isPaginatedResponse<T>(value: unknown): value is PaginatedResponse<T> {
 }
 
 export default function DocenteEspacios() {
-  const [espacios, setEspacios] = useState<EspacioCurricular[]>([]);
-  const [planEcs, setPlanEcs] = useState<Map<number, number>>(new Map());
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const [errorShown, _setErrorShown] = useState(false);
 
-  const loadData = useCallback(async (background = false) => {
-    if (!background) {
-      setLoading(true);
-    }
-
-    try {
-      const [espaciosRes, planEcsRes] = await Promise.all([
-        api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados'),
-        api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec'),
-      ]);
-
-      const espaciosData = Array.isArray(espaciosRes.data)
-        ? espaciosRes.data
-        : isPaginatedResponse<EspacioCurricular>(espaciosRes.data)
-          ? espaciosRes.data.results
+  const { data: espacios = [], isLoading: loadingEspacios } = useQuery({
+    queryKey: ['espacios-asignados'],
+    queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then(res => {
+      return Array.isArray(res.data)
+        ? res.data
+        : isPaginatedResponse<EspacioCurricular>(res.data)
+          ? res.data.results
           : [];
+    }),
+  });
 
-      setEspacios(espaciosData);
+  const { data: planEcsData = [], isLoading: loadingPlanEcs } = useQuery({
+    queryKey: ['planes-estudio-ec'],
+    queryFn: () => api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec').then(res => res.data.results || []),
+  });
 
-      const map = new Map<number, number>();
-      (planEcsRes.data.results || []).forEach((planEc) => {
-        map.set(planEc.espacio_curricular, planEc.id);
-      });
-      setPlanEcs(map);
-    } catch (error) {
-      toast.error(getApiErrorMessage(error, 'No se pudieron cargar tus espacios curriculares.'));
-    } finally {
-      if (!background) {
-        setLoading(false);
-      }
-    }
-  }, []);
+  if (!errorShown) {
+    // One-time toast on API error is handled by query error state
+  }
 
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
+  const loading = loadingEspacios || loadingPlanEcs;
 
-  useApiAutoRefresh(() => loadData(true), []);
+  const planEcsMap = new Map<number, number>();
+  planEcsData.forEach((planEc) => {
+    planEcsMap.set(planEc.espacio_curricular, planEc.id);
+  });
 
   const handleSelectEspacio = (espacio: EspacioCurricular) => {
-    const planEcId = planEcs.get(espacio.id);
+    const planEcId = planEcsMap.get(espacio.id);
     if (planEcId) {
-      // Guardar en sessionStorage para usar en páginas de programas/actividades
       sessionStorage.setItem('selected_espacio_curricular_id', espacio.id.toString());
       sessionStorage.setItem('selected_plan_estudio_ec_id', planEcId.toString());
       sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
-      
-      // Ir a programas
+
       navigate('/docente/programas');
       return;
     }
@@ -113,45 +96,21 @@ export default function DocenteEspacios() {
   return (
     <SectionCard title="Mis Espacios Curriculares">
       <p className="mb-3 text-muted">
-        Selecciona un espacio curricular para continuar con tu planificación anual.
+        Seleccioná un espacio curricular para continuar con tu planificación anual.
       </p>
-      
-      <div style={{ display: 'grid', gap: '0.75rem' }}>
+
+      <div className="flex-col gap-3">
         {espacios.map((espacio) => (
           <button
             key={espacio.id}
             onClick={() => handleSelectEspacio(espacio)}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '1rem',
-              backgroundColor: 'var(--surface)',
-              border: '1px solid var(--muted)',
-              borderRadius: '0.5rem',
-              cursor: 'pointer',
-              transition: 'all 200ms ease',
-            }}
-            onMouseEnter={(e) => {
-              const target = e.currentTarget as HTMLElement;
-              target.style.backgroundColor = 'var(--ink)';
-              target.style.color = 'var(--surface)';
-              target.style.borderColor = 'var(--accent)';
-            }}
-            onMouseLeave={(e) => {
-              const target = e.currentTarget as HTMLElement;
-              target.style.backgroundColor = 'var(--surface)';
-              target.style.color = 'inherit';
-              target.style.borderColor = 'var(--muted)';
-            }}
+            className="espacio-card"
           >
-            <div style={{ textAlign: 'left' }}>
-              <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>
-                {espacio.nombre}
-              </div>
-              <div style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+            <div className="flex-col" style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+              <span className="espacio-card-title">{espacio.nombre}</span>
+              <span className="text-sm text-muted">
                 {espacio.codigo} · Tipo: {espacio.tipo_espacio}
-              </div>
+              </span>
             </div>
             <ChevronRight size={20} />
           </button>

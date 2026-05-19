@@ -1,101 +1,106 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import SectionCard from '../../components/Common/SectionCard';
-import BasicTable from '../../components/Tables/BasicTable';
-import api from '../../services/api';
+import AdminCrudPage from '../../components/Admin/AdminCrudPage';
+import type { CrudField, ColumnConfig, DetailField } from '../../components/Admin/AdminCrudPage';
 
 interface EspacioCurricular {
   id: number;
   codigo: string;
   nombre: string;
   tipo_espacio: string;
+  anio_cursada: number;
+  periodo: string;
   creditos: number;
   horas_ip: number;
   horas_ta: number;
+  horas_totales?: number;
 }
 
-interface PaginatedResponse<T> {
-  results: T[];
-}
+const TIPO_ESPACIO_OPTIONS = [
+  { value: 'T1', label: 'T1' },
+  { value: 'T2', label: 'T2' },
+  { value: 'T3', label: 'T3' },
+  { value: 'T4', label: 'T4' },
+];
+
+const PERIODO_OPTIONS = [
+  { value: 'ANUAL', label: 'Anual' },
+  { value: '1S', label: '1S - Primer semestre' },
+  { value: '2S', label: '2S - Segundo semestre' },
+];
+
+const fields: CrudField[] = [
+  { name: 'codigo', label: 'Código', type: 'text', required: true },
+  { name: 'nombre', label: 'Nombre', type: 'text', required: true },
+  {
+    name: 'tipo_espacio',
+    label: 'Tipo de espacio',
+    type: 'select',
+    required: true,
+    options: TIPO_ESPACIO_OPTIONS,
+  },
+  { name: 'anio_cursada', label: 'Año de cursada', type: 'number', required: true, valueType: 'number' },
+  {
+    name: 'periodo',
+    label: 'Periodo',
+    type: 'select',
+    required: true,
+    options: PERIODO_OPTIONS,
+  },
+  { name: 'creditos', label: 'Créditos', type: 'number', required: true, valueType: 'number' },
+  { name: 'horas_ip', label: 'Horas IP', type: 'number', required: true, valueType: 'number' },
+  { name: 'horas_ta', label: 'Horas TA', type: 'number', required: true, valueType: 'number' },
+];
+
+const columns: ColumnConfig<EspacioCurricular>[] = [
+  { header: 'Código', render: (item) => item.codigo },
+  { header: 'Nombre', render: (item) => item.nombre },
+  { header: 'Tipo', render: (item) => item.tipo_espacio },
+  { header: 'Créditos', render: (item) => `${item.creditos} CRE` },
+  { header: 'Horas IP', render: (item) => `${item.horas_ip}h` },
+  { header: 'Horas TA', render: (item) => `${item.horas_ta}h` },
+];
+
+const detailFields: DetailField<EspacioCurricular>[] = [
+  { label: 'Código', render: (item) => item.codigo },
+  { label: 'Nombre', render: (item) => item.nombre },
+  { label: 'Tipo de espacio', render: (item) => item.tipo_espacio },
+  { label: 'Año de cursada', render: (item) => item.anio_cursada },
+  { label: 'Periodo', render: (item) => item.periodo },
+  { label: 'Créditos', render: (item) => `${item.creditos} CRE` },
+  { label: 'Horas IP', render: (item) => `${item.horas_ip}h` },
+  { label: 'Horas TA', render: (item) => `${item.horas_ta}h` },
+  {
+    label: 'Horas totales',
+    render: (item) =>
+      item.horas_totales != null ? `${item.horas_totales}h` : `${(item.horas_ip || 0) + (item.horas_ta || 0)}h`,
+  },
+];
 
 function AdminEspaciosCurriculares() {
-  const [selected, setSelected] = useState<EspacioCurricular | null>(null);
-
-  const { data: espacios = [] } = useQuery({
-    queryKey: ['espacios-curriculares'],
-    queryFn: () => api.get<PaginatedResponse<EspacioCurricular>>('/espacios-curriculares').then(res => res.data.results),
-  });
-
-  const rows = espacios.map((espacio) => ({
-    id: String(espacio.id),
-    cells: [
-      espacio.codigo,
-      espacio.nombre,
-      espacio.tipo_espacio,
-      `${espacio.creditos} CRE`,
-      `${espacio.horas_ip}h`,
-      `${espacio.horas_ta}h`,
-      <div className="table-actions" key={`actions-${espacio.id}`}>
-        <button className="button button-ghost button-small" type="button" onClick={() => setSelected(espacio)}>
-          Ver
-        </button>
-      </div>,
-    ],
-  }));
-
   return (
-    <>
-      <section className="page-header">
-        <div>
-          <p className="eyebrow">Gestion academica</p>
-          <h2>Espacios curriculares</h2>
-          <p>Consulta la distribucion de creditos y horas por tipo de EC.</p>
-        </div>
-      </section>
-
-      <SectionCard title="Listado de espacios curriculares">
-        <BasicTable
-          columns={['Codigo', 'Nombre', 'Tipo', 'Creditos', 'Horas IP', 'Horas TA', 'Acciones']}
-          rows={rows}
-        />
-      </SectionCard>
-
-      {selected ? (
-        <SectionCard title="Detalle de espacio curricular">
-          <div className="detail-grid">
-            <div>
-              <p className="eyebrow">Codigo</p>
-              <div>{selected.codigo}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Nombre</p>
-              <div>{selected.nombre}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Tipo</p>
-              <div>{selected.tipo_espacio}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Creditos</p>
-              <div>{selected.creditos} CRE</div>
-            </div>
-            <div>
-              <p className="eyebrow">Horas IP</p>
-              <div>{selected.horas_ip}h</div>
-            </div>
-            <div>
-              <p className="eyebrow">Horas TA</p>
-              <div>{selected.horas_ta}h</div>
-            </div>
-          </div>
-          <div className="form-actions mt-3">
-            <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
-              Cerrar
-            </button>
-          </div>
-        </SectionCard>
-      ) : null}
-    </>
+    <AdminCrudPage
+      endpoint="/espacios-curriculares"
+      title="Espacios curriculares"
+      eyebrow="Gestión académica"
+      description="Administración de la distribución de créditos y horas por tipo de EC."
+      fields={fields}
+      defaultValues={{
+        codigo: '',
+        nombre: '',
+        tipo_espacio: '',
+        anio_cursada: '',
+        periodo: '',
+        creditos: '',
+        horas_ip: '',
+        horas_ta: '',
+      }}
+      columns={columns}
+      detailFields={detailFields}
+      newButtonText="Nuevo espacio"
+      createTitle="Nuevo espacio curricular"
+      editTitle="Editar espacio curricular"
+      detailTitle="Detalle de espacio curricular"
+      tableTitle="Listado de espacios curriculares"
+    />
   );
 }
 

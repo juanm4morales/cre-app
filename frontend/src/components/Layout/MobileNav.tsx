@@ -1,5 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { House, FolderKanban, ClipboardList, CalendarCheck2, CircleUserRound, BookOpen, UserCog, Layers } from 'lucide-react';
+import { House, FolderKanban, ClipboardList, CalendarCheck2, CircleUserRound, BookOpen, UserCog, Layers, Moon, Sun } from 'lucide-react';
+import { useTheme } from '../../hooks/useTheme';
 
 interface MobileNavProps {
   role: 'docente' | 'admin';
@@ -7,6 +8,7 @@ interface MobileNavProps {
 
 function MobileNav({ role }: MobileNavProps) {
   const location = useLocation();
+  const { theme, toggle } = useTheme();
 
   const getDocenteItems = () => [
     { to: '/docente/resumen', label: 'Inicio', icon: House, exact: true },
@@ -21,7 +23,7 @@ function MobileNav({ role }: MobileNavProps) {
     { to: '/admin/programas', label: 'Programas', icon: BookOpen },
     { to: '/admin/actividades', label: 'Actividades', icon: ClipboardList },
     { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog },
-    { to: '/admin/reportes', label: 'Más', icon: Layers, prefixes: ['/admin/espacios', '/admin/carreras', '/admin/unidades', '/admin/tipos'] },
+    { to: '/admin/reportes', label: 'Más', icon: Layers, prefixes: ['/admin/espacios', '/admin/carreras', '/admin/unidades', '/admin/tipos', '/admin/planes', '/admin/competencias', '/admin/asignaciones'] },
   ];
 
   const items = role === 'docente' ? getDocenteItems() : getAdminItems();
@@ -60,6 +62,17 @@ const isActive = (item: NavItem) => {
           </NavLink>
         );
       })}
+      <button
+        className="mobile-nav-item"
+        type="button"
+        onClick={toggle}
+        aria-label="Cambiar tema"
+      >
+        <span className="mobile-nav-icon">
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </span>
+        <span>{theme === 'dark' ? 'Claro' : 'Oscuro'}</span>
+      </button>
     </nav>
   );
 }

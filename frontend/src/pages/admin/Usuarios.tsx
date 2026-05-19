@@ -310,7 +310,7 @@ function AdminUsuarios() {
       ) : null}
 
       <SectionCard title="Listado de docentes">
-        <BasicTable columns={['Nombre', 'Email', 'Estado', 'Acciones']} rows={rows} />
+        <BasicTable columns={['Nombre', 'Email', 'Estado', 'Acciones']} rows={rows} pageSize={10} />
       </SectionCard>
 
       {selected ? (
