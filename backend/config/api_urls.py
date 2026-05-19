@@ -12,6 +12,7 @@ from academics.viewsets import (
 )
 from planning.viewsets import (
     ActividadViewSet,
+    AsignacionDocenteViewSet,
     ClaseCalendarioViewSet,
     DiaClaseProgramaViewSet,
     ProgramaViewSet,
@@ -33,6 +34,7 @@ router.register("competencias", CompetenciaViewSet, basename="competencia")
 router.register("espacios-curriculares", EspacioCurricularViewSet, basename="espacio-curricular")
 router.register("espacios-asignados", EspaciosCurricularesAsignadosViewSet, basename="espacios-asignados")
 router.register("tipos-actividad", TipoActividadViewSet, basename="tipo-actividad")
+router.register("asignaciones-docentes", AsignacionDocenteViewSet, basename="asignacion-docente")
 router.register("programas", ProgramaViewSet, basename="programa")
 router.register("dias-clase", DiaClaseProgramaViewSet, basename="dia-clase")
 router.register("clases-calendario", ClaseCalendarioViewSet, basename="clase-calendario")

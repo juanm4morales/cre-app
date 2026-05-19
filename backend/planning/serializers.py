@@ -1,3 +1,6 @@
+from datetime import date
+
+from django.db import models
 from rest_framework import serializers
 from django.utils import timezone
 
@@ -34,6 +37,98 @@ class TipoActividadSerializer(serializers.ModelSerializer):
     class Meta:
         model = TipoActividad
         fields = ["id", "nombre", "descripcion", "tipo_dedicacion", "modalidad_trabajo"]
+
+
+class AsignacionDocenteSerializer(serializers.ModelSerializer):
+    docente_nombre = serializers.SerializerMethodField()
+    espacio_curricular_codigo = serializers.CharField(
+        source="espacio_curricular.codigo",
+        read_only=True,
+    )
+    espacio_curricular_nombre = serializers.CharField(
+        source="espacio_curricular.nombre",
+        read_only=True,
+    )
+    categoria_display = serializers.CharField(source="get_categoria_display", read_only=True)
+    activo = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = AsignacionDocente
+        fields = [
+            "id",
+            "docente",
+            "docente_nombre",
+            "espacio_curricular",
+            "espacio_curricular_codigo",
+            "espacio_curricular_nombre",
+            "categoria",
+            "categoria_display",
+            "vigente_desde",
+            "vigente_hasta",
+            "activo",
+        ]
+        read_only_fields = [
+            "docente_nombre",
+            "espacio_curricular_codigo",
+            "espacio_curricular_nombre",
+            "categoria_display",
+            "activo",
+        ]
+
+    def get_docente_nombre(self, obj: AsignacionDocente) -> str:
+        return obj.docente.get_full_name() or obj.docente.username
+
+    def validate_docente(self, value):
+        profile = getattr(value, "profile", None)
+        if value.is_superuser or not profile or profile.role != "DOCENTE":
+            raise serializers.ValidationError("La asignación solo puede vincular usuarios docentes.")
+        if not value.is_active:
+            raise serializers.ValidationError("No se puede asignar un docente inactivo.")
+        return value
+
+    def validate(self, attrs):
+        docente = attrs.get("docente")
+        espacio_curricular = attrs.get("espacio_curricular")
+        vigente_desde = attrs.get("vigente_desde")
+        vigente_hasta = attrs.get("vigente_hasta")
+
+        if self.instance is not None:
+            docente = attrs.get("docente", self.instance.docente)
+            espacio_curricular = attrs.get("espacio_curricular", self.instance.espacio_curricular)
+            vigente_desde = attrs.get("vigente_desde", self.instance.vigente_desde)
+            vigente_hasta = attrs.get("vigente_hasta", self.instance.vigente_hasta)
+
+        if vigente_hasta and vigente_desde and vigente_desde > vigente_hasta:
+            raise serializers.ValidationError(
+                {"vigente_hasta": "La fecha hasta no puede ser anterior a la fecha desde."}
+            )
+
+        if docente and espacio_curricular and vigente_desde:
+            upper_bound = vigente_hasta or date.max
+            overlaps = AsignacionDocente.objects.filter(
+                docente=docente,
+                espacio_curricular=espacio_curricular,
+                vigente_desde__lte=upper_bound,
+            ).filter(
+                models.Q(vigente_hasta__isnull=True)
+                | models.Q(vigente_hasta__gte=vigente_desde)
+            )
+            if self.instance is not None:
+                overlaps = overlaps.exclude(pk=self.instance.pk)
+
+            overlapping = overlaps.first()
+            if overlapping:
+                raise serializers.ValidationError(
+                    {
+                        "vigente_desde": (
+                            "Esta asignación se solapa con una existente "
+                            f"({overlapping.vigente_desde} - "
+                            f"{overlapping.vigente_hasta or 'actualidad'})."
+                        )
+                    }
+                )
+
+        return attrs
 
 
 class ProgramaSerializer(serializers.ModelSerializer):

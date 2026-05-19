@@ -43,6 +43,21 @@ class PlanEstudioSerializer(serializers.ModelSerializer):
             "vigente_hasta",
         ]
 
+    def validate(self, attrs):
+        vigente_desde = attrs.get("vigente_desde")
+        vigente_hasta = attrs.get("vigente_hasta")
+
+        if self.instance is not None:
+            vigente_desde = attrs.get("vigente_desde", self.instance.vigente_desde)
+            vigente_hasta = attrs.get("vigente_hasta", self.instance.vigente_hasta)
+
+        if vigente_desde and vigente_hasta and vigente_desde > vigente_hasta:
+            raise serializers.ValidationError(
+                {"vigente_hasta": "La fecha hasta no puede ser anterior a la fecha desde."}
+            )
+
+        return attrs
+
 
 class PlanEstudioECSerializer(serializers.ModelSerializer):
     class Meta:
@@ -69,4 +84,4 @@ class EspacioCurricularSerializer(serializers.ModelSerializer):
 class CompetenciaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Competencia
-        fields = ["id", "plan_estudio", "codigo", "nombre", "descripcion"]
+        fields = ["id", "plan_estudio", "codigo", "nombre", "descripcion", "activo"]

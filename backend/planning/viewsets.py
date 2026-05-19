@@ -11,6 +11,7 @@ from .models import ClaseCalendario, DiaClasePrograma
 from academics.models import EspacioCurricular
 from accounts.permissions import IsAdminProfile
 from .serializers import (
+    AsignacionDocenteSerializer,
     ActividadCreateSerializer,
     ActividadAjusteCreateSerializer,
     ActividadAjusteSerializer,
@@ -58,6 +59,31 @@ class TipoActividadViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return TipoActividad.objects.all().order_by("nombre")
+
+
+class AsignacionDocenteViewSet(viewsets.ModelViewSet):
+    serializer_class = AsignacionDocenteSerializer
+    permission_classes = [IsAdminProfile]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return AsignacionDocente.objects.none()
+
+        queryset = AsignacionDocente.objects.select_related(
+            "docente",
+            "docente__profile",
+            "espacio_curricular",
+        )
+
+        docente_id = self.request.query_params.get("docente_id")
+        if docente_id:
+            queryset = queryset.filter(docente_id=docente_id)
+
+        espacio_curricular_id = self.request.query_params.get("espacio_curricular_id")
+        if espacio_curricular_id:
+            queryset = queryset.filter(espacio_curricular_id=espacio_curricular_id)
+
+        return queryset.order_by("docente__last_name", "docente__first_name", "-vigente_desde")
 
 
 class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
