@@ -7,6 +7,13 @@ __pycache__/
 *.egg
 dist/
 build/
+*.whl
+
+# Node / Frontend
+node_modules/
+.tmp/
+frontend/dist/
+frontend/.vite/
 
 # Django
 db.sqlite3
@@ -18,11 +25,14 @@ staticfiles/
 .env.*
 !backend/.env.example
 
+# Virtual environments
+.venv/
+venv/
+
+# IDE / config
 .agents
-
+.opencode/
 .github
-
-# VS Code
 .vscode/
 
 # Docker
