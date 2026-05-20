@@ -47,6 +47,8 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('SECRET_KEY is required when DEBUG=False')
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+PROXY_ACCESS_SECRET = os.getenv('PROXY_ACCESS_SECRET', '').strip()
+PROXY_ACCESS_EXEMPT_PATHS = tuple(env_list('PROXY_ACCESS_EXEMPT_PATHS', '/healthz'))
 
 
 # Application definition
@@ -70,6 +72,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'config.middleware.ProxyAccessMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',

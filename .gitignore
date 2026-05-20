@@ -23,6 +23,7 @@ staticfiles/
 # Environment
 .env
 .env.*
+backend/.env2
 !backend/.env.example
 
 # Virtual environments

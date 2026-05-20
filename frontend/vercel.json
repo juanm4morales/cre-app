@@ -3,6 +3,18 @@
     {
       "source": "/api/:path*",
       "destination": "https://cre-app-7l7g.onrender.com/api/:path*"
+    },
+    {
+      "source": "/admin",
+      "destination": "https://cre-app-7l7g.onrender.com/admin/"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "https://cre-app-7l7g.onrender.com/admin/:path*"
+    },
+    {
+      "source": "/static/:path*",
+      "destination": "https://cre-app-7l7g.onrender.com/static/:path*"
     }
   ]
 }
