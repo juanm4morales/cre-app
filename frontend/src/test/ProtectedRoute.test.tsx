@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 interface AuthUser {
   name: string;
   role: 'docente' | 'admin';
+  availableRoles: ('docente' | 'admin')[];
 }
 
 vi.mock('../services/api', () => ({
@@ -25,7 +26,7 @@ function MockLogin() {
     <div>
       <span>Login page</span>
       <button onClick={async () => {
-        const user = await login({ username: 'admin', password: 'pass' });
+        const user = await login({ username: 'admin', password: 'pass', role: 'admin' });
         _resolveLogin?.(user);
       }}>
         Authenticate
@@ -49,6 +50,7 @@ function renderProtectedRoute(initialUrl: string, requiredRole?: 'docente' | 'ad
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route element={<ProtectedRoute requiredRole={requiredRole} />}>
             <Route path="/admin" element={<div data-testid="protected-content">Admin Panel</div>} />
+            <Route path="/docente" element={<div data-testid="protected-content">Docente Panel</div>} />
           </Route>
         </Routes>
       </AuthProvider>
@@ -66,10 +68,10 @@ describe('ProtectedRoute', () => {
   });
 
   it('renders children when authenticated with correct role', async () => {
-    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Admin', role: 'admin' }));
+    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Admin', role: 'admin', availableRoles: ['admin'] }));
 
     const mockGet = vi.mocked((await import('../services/api')).default.get);
-    mockGet.mockResolvedValueOnce({ data: { name: 'Admin', role: 'admin' } });
+    mockGet.mockResolvedValueOnce({ data: { name: 'Admin', role: 'admin', available_roles: ['admin'] } });
 
     renderProtectedRoute('/admin', 'admin');
 
@@ -79,10 +81,10 @@ describe('ProtectedRoute', () => {
   });
 
   it('redirects to /unauthorized when role does not match', async () => {
-    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Docente', role: 'docente' }));
+    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Docente', role: 'docente', availableRoles: ['docente'] }));
 
     const mockGet = vi.mocked((await import('../services/api')).default.get);
-    mockGet.mockResolvedValueOnce({ data: { name: 'Docente', role: 'docente' } });
+    mockGet.mockResolvedValueOnce({ data: { name: 'Docente', role: 'docente', available_roles: ['docente'] } });
 
     renderProtectedRoute('/admin', 'admin');
 
@@ -90,6 +92,7 @@ describe('ProtectedRoute', () => {
       expect(screen.getByText('Acceso restringido')).toBeInTheDocument();
     });
   });
+
 });
 
 describe('UnauthorizedPage', () => {

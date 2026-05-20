@@ -20,7 +20,7 @@ function TestConsumer() {
       <span data-testid="auth-status">{isAuthenticated ? 'logged-in' : 'logged-out'}</span>
       <span data-testid="user-role">{role || 'none'}</span>
       <span data-testid="user-name">{user?.name || 'anonymous'}</span>
-      <button data-testid="login-btn" onClick={() => login({ username: 'test', password: 'pass' })}>
+      <button data-testid="login-btn" onClick={() => login({ username: 'test', password: 'pass', role: 'docente' })}>
         Login
       </button>
       <button data-testid="logout-btn" onClick={() => logout()}>
@@ -58,9 +58,9 @@ describe('AuthContext', () => {
   });
 
   it('restores user from localStorage on mount', async () => {
-    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Stored User', role: 'admin' }));
+    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Stored User', role: 'admin', availableRoles: ['admin', 'docente'] }));
     const mockGet = vi.mocked(api.get);
-    mockGet.mockResolvedValue({ data: { name: 'Stored User', role: 'admin' } });
+    mockGet.mockResolvedValue({ data: { name: 'Stored User', role: 'admin', available_roles: ['admin', 'docente'] } });
 
     renderWithProvider();
 
@@ -78,7 +78,7 @@ describe('AuthContext', () => {
     mockGet.mockRejectedValueOnce(new Error('Not authenticated'));
     // Second call: login() calls /auth/csrf
     mockGet.mockResolvedValueOnce({});
-    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente' } });
+    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente', available_roles: ['docente'] } });
 
     renderWithProvider();
 
@@ -100,7 +100,7 @@ describe('AuthContext', () => {
     const mockPost = vi.mocked(api.post);
     mockGet.mockRejectedValueOnce(new Error('Not authenticated'));
     mockGet.mockResolvedValueOnce({});
-    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'unknown' } });
+    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'unknown', available_roles: [] } });
 
     renderWithProvider();
 
@@ -122,7 +122,7 @@ describe('AuthContext', () => {
     // Set up for initial login
     mockGet.mockRejectedValueOnce(new Error('Not authenticated'));
     mockGet.mockResolvedValueOnce({});
-    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente' } });
+    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente', available_roles: ['docente'] } });
 
     renderWithProvider();
 

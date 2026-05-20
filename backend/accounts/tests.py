@@ -232,12 +232,15 @@ class MeEndpointTest(TestCase):
             last_name="Test",
         )
 
-    def _login(self):
+    def _login(self, role=None):
         csrf_resp = self.client.get("/api/auth/csrf")
         token = csrf_resp.cookies["csrftoken"].value
+        payload = {"username": "metest", "password": "StrongPass1!"}
+        if role:
+            payload["role"] = role
         return self.client.post(
             "/api/auth/login",
-            {"username": "metest", "password": "StrongPass1!"},
+            payload,
             content_type="application/json",
             HTTP_X_CSRFTOKEN=token,
         )
@@ -254,6 +257,7 @@ class MeEndpointTest(TestCase):
         self.assertEqual(data["username"], "metest")
         self.assertEqual(data["name"], "Me Test")
         self.assertIn("role", data)
+        self.assertEqual(data["available_roles"], ["docente"])
 
     def test_me_role_is_docente_by_default(self):
         self._login()
@@ -268,6 +272,58 @@ class MeEndpointTest(TestCase):
         response = self.client.get("/api/auth/me")
         data = response.json()
         self.assertEqual(data["role"], "admin")
+
+    def test_me_role_is_admin_for_staff_docente_user(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.user.profile.role = UserProfile.Role.DOCENTE
+        self.user.profile.save(update_fields=["role"])
+        self._login()
+        response = self.client.get("/api/auth/me")
+        data = response.json()
+        self.assertEqual(data["role"], "admin")
+        self.assertEqual(data["available_roles"], ["admin", "docente"])
+
+    def test_login_can_select_docente_role_for_staff_docente_user(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.user.profile.role = UserProfile.Role.DOCENTE
+        self.user.profile.save(update_fields=["role"])
+
+        response = self._login(role="docente")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.json()
+        self.assertEqual(data["role"], "docente")
+        self.assertEqual(data["available_roles"], ["admin", "docente"])
+
+    def test_login_rejects_unavailable_role(self):
+        response = self._login(role="admin")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("No tenes permisos para ingresar como admin.", str(response.json()))
+
+    def test_switch_role_updates_active_role(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        self.user.profile.role = UserProfile.Role.DOCENTE
+        self.user.profile.save(update_fields=["role"])
+        self._login(role="docente")
+
+        token = self.client.get("/api/auth/csrf").cookies["csrftoken"].value
+        response = self.client.post(
+            "/api/auth/role",
+            {"role": "admin"},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["role"], "admin")
+
+        me_response = self.client.get("/api/auth/me")
+        self.assertEqual(me_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(me_response.json()["role"], "admin")
 
 
 # ═══════════════════════════════════════════════

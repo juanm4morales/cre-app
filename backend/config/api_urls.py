@@ -46,6 +46,7 @@ urlpatterns = [
     path("auth/csrf", accounts_views.csrf, name="auth-csrf"),
     path("auth/login", accounts_views.login_view, name="auth-login"),
     path("auth/logout", accounts_views.logout_view, name="auth-logout"),
+    path("auth/role", accounts_views.switch_role, name="auth-role"),
     path("auth/me", accounts_views.me, name="auth-me"),
     path("", include(router.urls)),
 ]

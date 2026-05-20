@@ -9,7 +9,7 @@ from django.utils import timezone
 from .models import Actividad, AsignacionDocente, Programa, TipoActividad, Unidad
 from .models import ClaseCalendario, DiaClasePrograma
 from academics.models import EspacioCurricular
-from accounts.permissions import IsAdminProfile
+from accounts.permissions import IsAdminProfile, is_admin_user
 from .serializers import (
     AsignacionDocenteSerializer,
     ActividadCreateSerializer,
@@ -33,14 +33,13 @@ from academics.serializers import EspacioCurricularSerializer
 from .services.calendar_generation import generate_calendar_classes_for_range
 
 
-def _is_admin(user):
-    profile = getattr(user, "profile", None)
-    return bool(profile and profile.role == "ADMIN")
+def _is_admin(user, session=None):
+    return is_admin_user(user, session)
 
 
-def _assigned_ec_ids(user):
+def _assigned_ec_ids(user, session=None):
     """Get IDs of curricular spaces currently assigned to user."""
-    if _is_admin(user):
+    if _is_admin(user, session):
         return None
 
     return AsignacionDocente.objects.activas(fecha=timezone.now().date()).filter(
@@ -95,7 +94,7 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """Retorna espacios curriculares asignados al docente actual."""
-        if _is_admin(request.user):
+        if _is_admin(request.user, request.session):
             # Admin ve todos los espacios
             espacios = EspacioCurricular.objects.all().order_by("nombre")
         else:
@@ -137,7 +136,7 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
             )
 
         # Verificar que el docente tiene asignado este espacio
-        if not _is_admin(request.user):
+        if not _is_admin(request.user, request.session):
             has_assignment = AsignacionDocente.objects.activas(
                 fecha=timezone.now().date()
             ).filter(
@@ -219,7 +218,7 @@ class ProgramaViewSet(viewsets.ModelViewSet):
             "plan_estudio_ec__plan_estudio",
         ).filter(activo=True)
 
-        assigned_ids = _assigned_ec_ids(self.request.user)
+        assigned_ids = _assigned_ec_ids(self.request.user, self.request.session)
         if assigned_ids is not None:
             queryset = queryset.filter(
                 plan_estudio_ec__espacio_curricular_id__in=assigned_ids,
@@ -263,7 +262,7 @@ class ActividadViewSet(viewsets.ModelViewSet):
             programa__activo=True,
         )
 
-        assigned_ids = _assigned_ec_ids(self.request.user)
+        assigned_ids = _assigned_ec_ids(self.request.user, self.request.session)
         if assigned_ids is not None:
             queryset = queryset.filter(
                 programa__plan_estudio_ec__espacio_curricular_id__in=assigned_ids,
@@ -324,7 +323,7 @@ class UnidadViewSet(viewsets.ModelViewSet):
             programa__activo=True,
         )
 
-        assigned_ids = _assigned_ec_ids(self.request.user)
+        assigned_ids = _assigned_ec_ids(self.request.user, self.request.session)
         if assigned_ids is not None:
             queryset = queryset.filter(
                 programa__plan_estudio_ec__espacio_curricular_id__in=assigned_ids,
@@ -407,7 +406,7 @@ class DiaClaseProgramaViewSet(viewsets.ModelViewSet):
             "programa__plan_estudio_ec",
         ).filter(activo=True, programa__activo=True)
 
-        assigned_ids = _assigned_ec_ids(self.request.user)
+        assigned_ids = _assigned_ec_ids(self.request.user, self.request.session)
         if assigned_ids is not None:
             queryset = queryset.filter(
                 programa__plan_estudio_ec__espacio_curricular_id__in=assigned_ids
@@ -443,7 +442,7 @@ class ClaseCalendarioViewSet(viewsets.ModelViewSet):
             "dia_clase",
         ).filter(programa__activo=True)
 
-        assigned_ids = _assigned_ec_ids(self.request.user)
+        assigned_ids = _assigned_ec_ids(self.request.user, self.request.session)
         if assigned_ids is not None:
             queryset = queryset.filter(
                 programa__plan_estudio_ec__espacio_curricular_id__in=assigned_ids
@@ -477,7 +476,7 @@ class ClaseCalendarioViewSet(viewsets.ModelViewSet):
         sobrescribir = serializer.validated_data["sobrescribir"]
 
         programa_qs = Programa.objects.filter(id=programa_id, activo=True)
-        assigned_ids = _assigned_ec_ids(request.user)
+        assigned_ids = _assigned_ec_ids(request.user, request.session)
         if assigned_ids is not None:
             programa_qs = programa_qs.filter(
                 plan_estudio_ec__espacio_curricular_id__in=assigned_ids

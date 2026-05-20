@@ -7,14 +7,17 @@ type UserRole = 'docente' | 'admin';
 interface AuthUser {
   name: string;
   role: UserRole;
+  availableRoles: UserRole[];
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   role: UserRole | null;
+  availableRoles: UserRole[];
   isAuthenticated: boolean;
   loading: boolean;
-  login: (payload: { username: string; password: string }) => Promise<AuthUser>;
+  login: (payload: { username: string; password: string; role: UserRole }) => Promise<AuthUser>;
+  switchRole: (role: UserRole) => Promise<AuthUser>;
   logout: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
 }
@@ -27,7 +30,22 @@ function loadStoredUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as AuthUser;
+
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    const role = parsed.role === 'admin' || parsed.role === 'docente' ? parsed.role : null;
+    if (!role) {
+      return null;
+    }
+
+    const availableRoles = Array.isArray(parsed.availableRoles)
+      ? parsed.availableRoles.filter((item): item is UserRole => item === 'admin' || item === 'docente')
+      : [role];
+
+    return {
+      name: parsed.name || 'Usuario',
+      role,
+      availableRoles: availableRoles.length > 0 ? availableRoles : [role],
+    };
   } catch {
     return null;
   }
@@ -41,6 +59,25 @@ function persistUser(user: AuthUser | null) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
 }
 
+function normalizeUser(data: unknown, fallbackName = 'Usuario'): AuthUser {
+  const payload = (data && typeof data === 'object' ? data : {}) as {
+    name?: string;
+    username?: string;
+    role?: string;
+    available_roles?: string[];
+  };
+  const role: UserRole = payload.role === 'admin' ? 'admin' : 'docente';
+  const availableRoles = Array.isArray(payload.available_roles)
+    ? payload.available_roles.filter((item): item is UserRole => item === 'admin' || item === 'docente')
+    : [role];
+
+  return {
+    name: payload.name || payload.username || fallbackName,
+    role,
+    availableRoles: availableRoles.length > 0 ? availableRoles : [role],
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser());
   const [loading, setLoading] = useState(true);
@@ -52,11 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         await api.get('/auth/csrf');
         const response = await api.get('/auth/me');
-        const apiRole = response.data?.role;
-        const nextUser: AuthUser = {
-          name: response.data?.name || response.data?.username || 'Usuario',
-          role: apiRole === 'admin' || apiRole === 'docente' ? apiRole : 'docente',
-        };
+        const nextUser = normalizeUser(response.data);
 
         if (!isMounted) {
           return;
@@ -87,22 +120,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = async ({ username, password }: { username: string; password: string }) => {
+  const login = async ({ username, password, role }: { username: string; password: string; role: UserRole }) => {
     setLoading(true);
     try {
       await api.get('/auth/csrf');
-      const response = await api.post('/auth/login', { username, password });
-      const apiRole = response.data?.role;
-      const nextUser: AuthUser = {
-        name: response.data?.name || username,
-        role: apiRole === 'admin' || apiRole === 'docente' ? apiRole : 'docente',
-      };
+      const response = await api.post('/auth/login', { username, password, role });
+      const nextUser = normalizeUser(response.data, username);
       setUser(nextUser);
       persistUser(nextUser);
       return nextUser;
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchRole = async (role: UserRole) => {
+    const response = await api.post('/auth/role', { role });
+    const nextUser = normalizeUser(response.data, user?.name || 'Usuario');
+    setUser(nextUser);
+    persistUser(nextUser);
+    return nextUser;
   };
 
   const logout = async () => {
@@ -114,17 +151,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const value = useMemo<AuthContextValue>(() => {
-    return {
-      user,
-      role: user?.role || null,
-      isAuthenticated: Boolean(user?.role),
-      loading,
-      login,
-      logout,
-      setUser,
-    };
-  }, [user, loading]);
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    role: user?.role || null,
+    availableRoles: user?.availableRoles || [],
+    isAuthenticated: Boolean(user?.role),
+    loading,
+    login,
+    switchRole,
+    logout,
+    setUser,
+  }), [user, loading, login, switchRole, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

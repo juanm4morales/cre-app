@@ -38,6 +38,7 @@ describe('LoginPage', () => {
 
     expect(await screen.findByText('Ingreso a la plataforma')).toBeInTheDocument();
     expect(screen.getByLabelText('Usuario')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ingresar como')).toBeInTheDocument();
     expect(screen.getByLabelText('Contraseña')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ingresar' })).toBeInTheDocument();
   });
@@ -61,7 +62,7 @@ describe('LoginPage', () => {
     const mockGet = vi.mocked(api.get);
     const mockPost = vi.mocked(api.post);
     mockGet.mockRejectedValueOnce(new Error('Not authenticated'));
-    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente' } });
+    mockPost.mockResolvedValueOnce({ data: { name: 'Test User', role: 'docente', available_roles: ['docente'] } });
 
     renderLoginPage();
 
@@ -76,6 +77,7 @@ describe('LoginPage', () => {
       expect(mockPost).toHaveBeenCalledWith('/auth/login', {
         username: 'testuser',
         password: 'password123',
+        role: 'docente',
       });
     });
   });

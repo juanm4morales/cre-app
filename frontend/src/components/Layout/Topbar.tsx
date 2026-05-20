@@ -78,7 +78,7 @@ function getCurrentSectionLabel(pathname: string): string {
 }
 
 function Topbar({ role }: TopbarProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, switchRole } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [selectedEspacioId, setSelectedEspacioId] = useState<string>(
@@ -91,6 +91,10 @@ function Topbar({ role }: TopbarProps) {
   const roleLabel = role === 'admin' ? 'Gestión académica administrativa' : 'Gestión docente CRE';
   const roleLabelCompact = role === 'admin' ? 'Gestión admin CRE' : 'Gestión docente CRE';
   const currentSection = getCurrentSectionLabel(location.pathname);
+  const targetRole = role === 'admin' ? 'docente' : 'admin';
+  const canSwitchPortals = user?.availableRoles.includes(targetRole) ?? false;
+  const portalSwitchPath = targetRole === 'docente' ? '/docente/resumen' : '/admin';
+  const portalSwitchLabel = targetRole === 'docente' ? 'Entrar como docente' : 'Entrar como admin';
 
   const shouldRefreshCurrentPath = (path: string) => {
     return DOCENTE_REFRESH_PATHS.some((refreshPath) => path.startsWith(refreshPath));
@@ -300,8 +304,28 @@ function Topbar({ role }: TopbarProps) {
                   Mi cuenta
                 </button>
               ) : null}
+              {canSwitchPortals ? (
+                <button
+                  ref={(el) => { menuItemRefs.current[role === 'docente' ? 1 : 0] = el; }}
+                  className="account-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={async () => {
+                    closeAndFocusTrigger();
+                    try {
+                      await switchRole(targetRole);
+                      navigate(portalSwitchPath);
+                    } catch {
+                      toast.error('No se pudo cambiar el modo de acceso.');
+                    }
+                  }}
+                >
+                  <CircleUserRound size={15} />
+                  {portalSwitchLabel}
+                </button>
+              ) : null}
               <button
-                ref={(el) => { menuItemRefs.current[role === 'docente' ? 1 : 0] = el; }}
+                ref={(el) => { menuItemRefs.current[role === 'docente' ? (canSwitchPortals ? 2 : 1) : (canSwitchPortals ? 1 : 0)] = el; }}
                 className="account-menu-item"
                 type="button"
                 role="menuitem"

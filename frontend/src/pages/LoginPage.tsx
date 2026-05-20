@@ -11,6 +11,7 @@ import { getApiErrorMessage } from '../utils/errors';
 const loginSchema = z.object({
   username: z.string().min(1, 'El usuario es requerido'),
   password: z.string().min(1, 'La contraseña es requerida'),
+  role: z.enum(['docente', 'admin']),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -28,6 +29,7 @@ function LoginPage() {
     defaultValues: {
       username: '',
       password: '',
+      role: 'docente',
     },
   });
 
@@ -39,7 +41,7 @@ function LoginPage() {
 
   const onSubmit = async (data: LoginFormValues) => {
     try {
-      const user = await login({ username: data.username, password: data.password });
+      const user = await login({ username: data.username, password: data.password, role: data.role });
       navigate(user.role === 'admin' ? '/admin' : '/docente');
     } catch (error) {
       toast.error(getApiErrorMessage(error, 'No se pudo iniciar sesión. Verifica tus credenciales.'));
@@ -81,6 +83,24 @@ function LoginPage() {
             {errors.username && (
               <span id="username-error" className="error-text" role="alert">
                 {errors.username.message}
+              </span>
+            )}
+          </div>
+          <div>
+            <label htmlFor="role-input">Ingresar como</label>
+            <select
+              id="role-input"
+              className={`input ${errors.role ? 'input-error' : ''}`}
+              aria-invalid={errors.role ? 'true' : 'false'}
+              aria-describedby={errors.role ? 'role-error' : undefined}
+              {...register('role')}
+            >
+              <option value="docente">Docente</option>
+              <option value="admin">Administrador</option>
+            </select>
+            {errors.role && (
+              <span id="role-error" className="error-text" role="alert">
+                {errors.role.message}
               </span>
             )}
           </div>

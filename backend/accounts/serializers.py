@@ -2,6 +2,8 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.password_validation import validate_password as django_validate_password
 from rest_framework import serializers
 
+from .permissions import get_active_role, get_available_roles
+
 
 User = get_user_model()
 
@@ -9,6 +11,7 @@ User = get_user_model()
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField()
     password = serializers.CharField()
+    role = serializers.ChoiceField(choices=[("docente", "Docente"), ("admin", "Admin")], required=False)
 
     def validate(self, attrs):
         username = attrs.get("username")
@@ -30,7 +33,16 @@ class LoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError("El usuario esta inactivo.")
 
+        available_roles = get_available_roles(user)
+        requested_role = attrs.get("role")
+        if requested_role and requested_role not in available_roles:
+            raise serializers.ValidationError(
+                f"No tenes permisos para ingresar como {requested_role}."
+            )
+
         attrs["user"] = user
+        attrs["available_roles"] = available_roles
+        attrs["role"] = requested_role or get_active_role(user)
         return attrs
 
 class UserSerializer(serializers.ModelSerializer):

@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from academics.models import Competencia
 from academics.serializers import CompetenciaSerializer
+from accounts.permissions import is_admin_user
 from academics.models import PlanEstudioEC
 from .models import (
     Actividad,
@@ -20,11 +21,10 @@ from .models import (
 )
 
 
-def _docente_asignado(user, espacio_curricular_id):
+def _docente_asignado(user, espacio_curricular_id, session=None):
     """Check if user has an active assignment to the curricular space.
     Admin users bypass the check (they can create/edit for any space)."""
-    profile = getattr(user, "profile", None)
-    if profile and profile.role == "ADMIN":
+    if is_admin_user(user, session):
         return True
     return (
         AsignacionDocente.objects.activas(fecha=timezone.now().date())
@@ -176,7 +176,7 @@ class UnidadCreateSerializer(serializers.ModelSerializer):
         if not value.activo:
             raise serializers.ValidationError("El programa seleccionado está dado de baja.")
         request = self.context.get("request")
-        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id):
+        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id, request.session):
             raise serializers.ValidationError("No tienes asignado este espacio curricular.")
         return value
 
@@ -194,7 +194,7 @@ class ProgramaCreateSerializer(serializers.ModelSerializer):
 
     def validate_plan_estudio_ec(self, value: PlanEstudioEC):
         request = self.context.get("request")
-        if request and not _docente_asignado(request.user, value.espacio_curricular_id):
+        if request and not _docente_asignado(request.user, value.espacio_curricular_id, request.session):
             raise serializers.ValidationError("No tienes asignado este espacio curricular.")
         return value
 
@@ -272,7 +272,7 @@ class ActividadCreateSerializer(serializers.ModelSerializer):
         if not value.activo:
             raise serializers.ValidationError("El programa seleccionado está dado de baja.")
         request = self.context.get("request")
-        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id):
+        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id, request.session):
             raise serializers.ValidationError("No tienes asignado este espacio curricular.")
         return value
 
@@ -478,7 +478,7 @@ class DiaClaseProgramaSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("El programa seleccionado está dado de baja.")
 
         request = self.context.get("request")
-        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id):
+        if request and not _docente_asignado(request.user, value.plan_estudio_ec.espacio_curricular_id, request.session):
             raise serializers.ValidationError("No tienes asignado este espacio curricular.")
         return value
 

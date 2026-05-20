@@ -6,6 +6,7 @@ from django.db.models import Sum, Q
 from django.utils import timezone
 
 from academics.models import ConfiguracionCRE, EspacioCurricular, PlanEstudioEC
+from accounts.permissions import is_admin_user
 from .models import Programa, Actividad, AsignacionDocente
 from .forms import ActividadForm, ProgramaForm
 
@@ -40,17 +41,8 @@ def _actividad_accesible_qs(user, ec_id):
     )
 
 
-def _is_admin_user(user) -> bool:
-    """
-    Determina si un usuario tiene permisos de administración.
-
-    Retorna True si: superuser, is_staff, o perfil tiene role ADMIN.
-    Retorna False si no existe perfil (falso negativo, pero seguro).
-    """
-    if user.is_superuser or user.is_staff:
-        return True
-    profile = getattr(user, "profile", None)
-    return bool(profile and getattr(profile, "role", None) == "ADMIN")
+def _is_admin_user(user, session=None) -> bool:
+    return is_admin_user(user, session)
 
 @login_required
 def seleccionar_espacio_curricular(request):
@@ -134,14 +126,14 @@ def dashboard_ec(request):
 		plan_estudio_ec=plan_estudio_ec,
 		activo=True,
 	).prefetch_related('actividades').annotate(
-		total_horas=models.Sum('actividades__horas', filter=Q(actividades__activo=True))
+		total_horas=Sum('actividades__horas', filter=Q(actividades__activo=True))
 	)
 
 	allowed_total_horas = (
 		plan_estudio_ec.espacio_curricular.creditos * ConfiguracionCRE.get_hours_per_cre()
 	)
 	
-	if _is_admin_user(request.user):
+	if _is_admin_user(request.user, request.session):
 		for programa in programas:
 			programa.total_horas = programa.total_horas or 0
 			programa.horas_diff = programa.total_horas - allowed_total_horas
@@ -154,7 +146,7 @@ def dashboard_ec(request):
 			'plan_estudio_ec': plan_estudio_ec,
 			'programas': programas,
 			'allowed_total_horas': allowed_total_horas,
-			'is_admin': _is_admin_user(request.user),
+			'is_admin': _is_admin_user(request.user, request.session),
 			'user_name': request.user.get_full_name() or request.user.get_username(),
 		},
 	)
