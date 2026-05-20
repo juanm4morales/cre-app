@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 import api, { isAuthenticationError } from '../services/api';
 
 type UserRole = 'docente' | 'admin';
@@ -126,7 +127,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await api.get('/auth/csrf');
       const response = await api.post('/auth/login', { username, password, role });
       const nextUser = normalizeUser(response.data, username);
-      setUser(nextUser);
+      flushSync(() => {
+        setUser(nextUser);
+      });
       persistUser(nextUser);
       return nextUser;
     } finally {
@@ -137,7 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const switchRole = async (role: UserRole) => {
     const response = await api.post('/auth/role', { role });
     const nextUser = normalizeUser(response.data, user?.name || 'Usuario');
-    setUser(nextUser);
+    flushSync(() => {
+      setUser(nextUser);
+    });
     persistUser(nextUser);
     return nextUser;
   };

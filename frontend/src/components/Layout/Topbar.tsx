@@ -93,7 +93,6 @@ function Topbar({ role }: TopbarProps) {
   const currentSection = getCurrentSectionLabel(location.pathname);
   const targetRole = role === 'admin' ? 'docente' : 'admin';
   const canSwitchPortals = user?.availableRoles.includes(targetRole) ?? false;
-  const portalSwitchPath = targetRole === 'docente' ? '/docente/resumen' : '/admin';
   const portalSwitchLabel = targetRole === 'docente' ? 'Entrar como docente' : 'Entrar como admin';
 
   const shouldRefreshCurrentPath = (path: string) => {
@@ -313,8 +312,8 @@ function Topbar({ role }: TopbarProps) {
                   onClick={async () => {
                     closeAndFocusTrigger();
                     try {
-                      await switchRole(targetRole);
-                      navigate(portalSwitchPath);
+                      const nextUser = await switchRole(targetRole);
+                      navigate(nextUser.role === 'admin' ? '/admin' : '/docente/resumen');
                     } catch {
                       toast.error('No se pudo cambiar el modo de acceso.');
                     }

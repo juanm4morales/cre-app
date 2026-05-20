@@ -13,7 +13,7 @@ vi.mock('../services/api', () => ({
 }));
 
 function TestConsumer() {
-  const { user, isAuthenticated, loading, login, logout, role } = useAuth();
+  const { user, isAuthenticated, loading, login, logout, role, switchRole } = useAuth();
   if (loading) return <div role="status">Loading...</div>;
   return (
     <div>
@@ -25,6 +25,9 @@ function TestConsumer() {
       </button>
       <button data-testid="logout-btn" onClick={() => logout()}>
         Logout
+      </button>
+      <button data-testid="switch-role-btn" onClick={() => switchRole('admin')}>
+        Switch Role
       </button>
     </div>
   );
@@ -144,6 +147,27 @@ describe('AuthContext', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('auth-status')).toHaveTextContent('logged-out');
+    });
+  });
+
+  it('switchRole updates active role immediately', async () => {
+    window.localStorage.setItem('cre_auth_user', JSON.stringify({ name: 'Hybrid User', role: 'docente', availableRoles: ['admin', 'docente'] }));
+    const mockGet = vi.mocked(api.get);
+    const mockPost = vi.mocked(api.post);
+    mockGet.mockResolvedValue({ data: { name: 'Hybrid User', role: 'docente', available_roles: ['admin', 'docente'] } });
+    mockPost.mockResolvedValueOnce({ data: { name: 'Hybrid User', role: 'admin', available_roles: ['admin', 'docente'] } });
+
+    renderWithProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-role')).toHaveTextContent('docente');
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('switch-role-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-role')).toHaveTextContent('admin');
     });
   });
 });
