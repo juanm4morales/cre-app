@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://cre-app-7l7g.onrender.com/api/:path*"
+    }
+  ]
+}
