@@ -616,3 +616,160 @@ textarea.input {
   margin-bottom: 0.25rem;
   color: var(--ink);
 }
+
+/* ==========================================================================
+   Phase 3 UI/UX Enhancements (CREApp Portal Admin)
+   ========================================================================== */
+
+/* ── Badges/Pills for Status ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.badge-success {
+  background-color: var(--color-success-light);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+
+.badge-danger {
+  background-color: var(--color-danger-light);
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
+}
+
+.badge-warning {
+  background-color: var(--color-warning-light);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+
+.badge-info {
+  background-color: var(--color-info-light);
+  border-color: var(--color-info-border);
+  color: var(--color-info-text);
+}
+
+.badge-gray {
+  background-color: var(--color-gray-150);
+  border-color: var(--color-gray-300);
+  color: var(--color-text-muted);
+}
+
+:root.dark .badge-gray {
+  background-color: var(--color-gray-800);
+  border-color: var(--color-gray-700);
+  color: var(--color-text-muted);
+}
+
+/* ── Filter Toolbar ── */
+.filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  background: var(--color-bg-panel);
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.filter-toolbar-search {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+}
+
+.filter-toolbar-search svg {
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-subtle);
+  pointer-events: none;
+}
+
+.filter-toolbar-search .input {
+  padding-left: 2.5rem;
+}
+
+.filter-toolbar-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.filter-toolbar-select {
+  min-width: 160px;
+}
+
+/* ── Detail Grid Premium Enhancements ── */
+.detail-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.95rem 1.15rem;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  transition: all var(--transition-base);
+}
+
+.detail-item:hover {
+  background: var(--color-bg-panel);
+  border-color: var(--color-primary-300);
+  box-shadow: var(--shadow-sm);
+}
+
+.detail-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.15rem;
+}
+
+.detail-item-icon {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+}
+
+.detail-item-value {
+  font-size: 1.05rem;
+  font-weight: 550;
+  color: var(--ink);
+}
+
+/* ── Form Groups ── */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+
+.form-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.form-label-required::after {
+  content: " *";
+  color: var(--color-danger);
+}
