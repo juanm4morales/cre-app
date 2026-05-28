@@ -82,27 +82,27 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
       links: [{ to: '/admin', label: 'Inicio', icon: House }],
     },
     {
-      title: 'Gestión',
-      links: [
-        { to: '/admin/programas', label: 'Programas', icon: BookOpen },
-        { to: '/admin/actividades', label: 'Actividades', icon: ClipboardList },
-        { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog },
-        { to: '/admin/asignaciones-docentes', label: 'Asignaciones docentes', icon: UserCog },
-      ],
-    },
-    {
       title: 'Estructura Académica',
       links: [
+        { to: '/admin/unidades-academicas', label: 'Unidades académicas', icon: Layers },
         { to: '/admin/carreras', label: 'Carreras', icon: School },
+        { to: '/admin/planes-estudio', label: 'Planes de estudio', icon: BookOpen },
         {
           to: '/admin/espacios-curriculares',
           label: 'Espacios curriculares',
           icon: BookOpen,
         },
-        { to: '/admin/unidades-academicas', label: 'Unidades académicas', icon: Layers },
-        { to: '/admin/tipos-actividad', label: 'Tipos de actividad', icon: Settings2 },
-        { to: '/admin/planes-estudio', label: 'Planes de estudio', icon: BookOpen },
+        { to: '/admin/programas', label: 'Programas', icon: FolderKanban },
         { to: '/admin/competencias', label: 'Competencias', icon: ClipboardList },
+      ],
+    },
+    {
+      title: 'Gestión y Configuración',
+      links: [
+        { to: '/admin/usuarios', label: 'Usuarios', icon: UserCog },
+        { to: '/admin/asignaciones-docentes', label: 'Asignaciones docentes', icon: UserCog },
+        { to: '/admin/actividades', label: 'Actividades', icon: ClipboardList },
+        { to: '/admin/tipos-actividad', label: 'Tipos de actividad', icon: Settings2 },
       ],
     },
     {
