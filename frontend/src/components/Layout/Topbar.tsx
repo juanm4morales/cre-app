@@ -100,7 +100,7 @@ function Topbar({ role }: TopbarProps) {
   };
 
   const { data: espacios = [] } = useQuery({
-    queryKey: ['espacios-asignados'],
+    queryKey: ['espacios-asignados', user?.name || 'anon'],
     queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then(res => {
       return Array.isArray(res.data)
         ? res.data
@@ -112,7 +112,7 @@ function Topbar({ role }: TopbarProps) {
   });
 
   const { data: planEcsData = [] } = useQuery({
-    queryKey: ['planes-estudio-ec'],
+    queryKey: ['planes-estudio-ec', user?.name || 'anon'],
     queryFn: () => api.get<{ results: PlanEstudioEC[] }>('/planes-estudio-ec').then(res => res.data.results || []),
     enabled: role === 'docente',
   });

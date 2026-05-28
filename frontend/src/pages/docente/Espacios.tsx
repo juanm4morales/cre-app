@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
+import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
 interface EspacioCurricular {
@@ -29,10 +30,11 @@ function isPaginatedResponse<T>(value: unknown): value is PaginatedResponse<T> {
 
 export default function DocenteEspacios() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [errorShown, _setErrorShown] = useState(false);
 
   const { data: espacios = [], isLoading: loadingEspacios } = useQuery({
-    queryKey: ['espacios-asignados'],
+    queryKey: ['espacios-asignados', user?.name || 'anon'],
     queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then(res => {
       return Array.isArray(res.data)
         ? res.data
@@ -43,7 +45,7 @@ export default function DocenteEspacios() {
   });
 
   const { data: planEcsData = [], isLoading: loadingPlanEcs } = useQuery({
-    queryKey: ['planes-estudio-ec'],
+    queryKey: ['planes-estudio-ec', user?.name || 'anon'],
     queryFn: () => api.get<PaginatedResponse<PlanEstudioEC>>('/planes-estudio-ec').then(res => res.data.results || []),
   });
 
