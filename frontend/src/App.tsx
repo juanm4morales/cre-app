@@ -32,7 +32,7 @@ import { useAuth } from './contexts/AuthContext';
 
 function IndexRedirect() {
   const { isAuthenticated, role, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <RouteLoading />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <Navigate to={role === 'admin' ? '/admin' : '/docente'} replace />;
 }
