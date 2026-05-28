@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, Edit, Trash2, Plus } from 'lucide-react';
+import { Eye, Edit, Trash2, Plus, BookOpen, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -350,9 +350,9 @@ function DocenteProgramas() {
   const rows = programas.map((programa) => ({
     id: String(programa.id),
     cells: [
-      planEcLabel(programa.plan_estudio_ec),
-      programa.anio_academico,
-      `${programa.descripcion || 'Sin descripcion'}`,
+      <span className="badge badge-gray" key={`plan-${programa.id}`}>{planEcLabel(programa.plan_estudio_ec)}</span>,
+      <span className="badge badge-info" key={`year-${programa.id}`}>{programa.anio_academico}</span>,
+      `${programa.descripcion || 'Sin descripción'}`,
       <div className="table-actions" key={`actions-${programa.id}`}>
         <button
           className="icon-button"
@@ -411,14 +411,17 @@ function DocenteProgramas() {
 
         <SectionCard title={viewOnly ? 'Información del programa' : editing ? 'Datos del programa' : 'Crear nuevo programa'}>
           <form className="form-grid" onSubmit={handleSubmitPrograma(onSubmitPrograma)}>
-            <div>
+            <div className="form-group">
+              <label className="form-label form-label-required">
+                <FileText size={16} /> Plan de Estudio / Espacio Curricular
+              </label>
               <select
                 className={`select ${errorsPrograma.plan_estudio_ec ? 'input-error' : ''}`}
                 disabled={Boolean(editing) || viewOnly}
                 aria-invalid={errorsPrograma.plan_estudio_ec ? 'true' : 'false'}
                 {...registerPrograma('plan_estudio_ec')}
               >
-                <option value="">Plan de estudio - Espacio curricular</option>
+                <option value="">Seleccioná un plan - espacio</option>
                 {planEcs.map((plan) => (
                   <option key={plan.id} value={plan.id}>
                     {planEcLabel(plan.id)}
@@ -429,7 +432,10 @@ function DocenteProgramas() {
                 <span className="error-text" role="alert">{errorsPrograma.plan_estudio_ec.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label form-label-required">
+                <Calendar size={16} /> Año Académico
+              </label>
               <input
                 className={`input ${errorsPrograma.anio_academico ? 'input-error' : ''}`}
                 type="number"
@@ -442,7 +448,10 @@ function DocenteProgramas() {
                 <span className="error-text" role="alert">{errorsPrograma.anio_academico.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label">
+                <BookOpen size={16} /> Descripción
+              </label>
               <input
                 className={`input ${errorsPrograma.descripcion ? 'input-error' : ''}`}
                 type="text"
@@ -455,7 +464,7 @@ function DocenteProgramas() {
                 <span className="error-text" role="alert">{errorsPrograma.descripcion.message}</span>
               )}
             </div>
-            <div className="form-actions">
+            <div className="form-actions form-field-full">
               {!viewOnly ? (
                 <button className="button" type="submit" disabled={saveProgramaMutation.isPending}>
                   {editing ? 'Guardar cambios' : 'Crear programa'}
@@ -475,7 +484,10 @@ function DocenteProgramas() {
                 Para habilitar la carga de actividades, el programa actual debe tener al menos una unidad activa.
               </p>
               <form className="form-grid" onSubmit={handleSubmitUnidad(onSubmitUnidad)}>
-                <div>
+                <div className="form-group">
+                  <label className="form-label form-label-required">
+                    Número de Unidad
+                  </label>
                   <input
                     className={`input ${errorsUnidad.numero ? 'input-error' : ''}`}
                     type="number"
@@ -488,7 +500,10 @@ function DocenteProgramas() {
                     <span className="error-text" role="alert">{errorsUnidad.numero.message}</span>
                   )}
                 </div>
-                <div>
+                <div className="form-group">
+                  <label className="form-label form-label-required">
+                    Descripción / Nombre de Unidad
+                  </label>
                   <input
                     className={`input ${errorsUnidad.descripcion ? 'input-error' : ''}`}
                     type="text"
@@ -500,7 +515,7 @@ function DocenteProgramas() {
                     <span className="error-text" role="alert">{errorsUnidad.descripcion.message}</span>
                   )}
                 </div>
-                <div className="form-actions">
+                <div className="form-actions form-field-full">
                   <button className="button" type="submit" disabled={createUnidadMutation.isPending}>
                     Agregar unidad
                   </button>
@@ -661,14 +676,33 @@ function DocenteProgramas() {
           </div>
         ) : (
           <>
-            <div className="mb-4">
-              <p className="muted mt-0">
-                <strong>Descripción:</strong> {programaActual.descripcion || 'Sin descripción'}
-              </p>
-              <p className="muted">
-                <strong>Unidades:</strong> {unidadesProgramaActual.length}{' '}
-                {unidadesProgramaActual.length === 1 ? 'unidad' : 'unidades'}
-              </p>
+            <div className="detail-grid mb-4">
+              <div className="detail-item">
+                <div className="detail-item-header">
+                  <span className="detail-item-icon"><FileText size={16} /></span>
+                  <p className="eyebrow">Espacio Curricular</p>
+                </div>
+                <div className="detail-item-value">{selectedEspacioNombre}</div>
+              </div>
+              <div className="detail-item">
+                <div className="detail-item-header">
+                  <span className="detail-item-icon"><BookOpen size={16} /></span>
+                  <p className="eyebrow">Descripción</p>
+                </div>
+                <div className="detail-item-value">{programaActual.descripcion || 'Sin descripción'}</div>
+              </div>
+              <div className="detail-item">
+                <div className="detail-item-header">
+                  <span className="detail-item-icon"><Calendar size={16} /></span>
+                  <p className="eyebrow">Unidades</p>
+                </div>
+                <div className="detail-item-value">
+                  <span className="badge badge-info">
+                    {unidadesProgramaActual.length}{' '}
+                    {unidadesProgramaActual.length === 1 ? 'unidad' : 'unidades'}
+                  </span>
+                </div>
+              </div>
             </div>
             <div className="form-actions">
               <button
