@@ -236,7 +236,7 @@ function Topbar({ role }: TopbarProps) {
   return (
     <header className="topbar">
       <div className="topbar-head">
-        <h1 className="topbar-title">CRE app</h1>
+        <h1 className="topbar-title">CREApp</h1>
         <div className="topbar-subtitle">
           <span className="topbar-role-label topbar-role-label-long">{roleLabel}</span>
           <span className="topbar-role-label topbar-role-label-short">{roleLabelCompact}</span>

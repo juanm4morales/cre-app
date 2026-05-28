@@ -38,13 +38,13 @@
 }
 
 .brand-name {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-weight: 800;
-  font-size: 1.35rem;
+  font-size: 1.4rem;
   margin-top: 0;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  color: var(--ink);
+  color: var(--color-primary-600);
 }
 
 .brand-tag {
@@ -321,12 +321,12 @@
 }
 
 .topbar-title {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Outfit', sans-serif;
   font-size: 1.75rem;
   margin: 0;
   letter-spacing: -0.02em;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 800;
+  color: var(--color-primary-600);
 }
 
 .topbar-subtitle {

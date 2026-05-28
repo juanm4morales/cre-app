@@ -61,7 +61,7 @@ function LoginPage() {
           alt="UNCuyo"
           className="auth-logo"
         />
-        <p className="eyebrow">CRE APP</p>
+        <div className="brand-name" style={{ fontSize: '1.8rem', marginBottom: '0.8rem' }}>CREApp</div>
         <h1>Ingreso a la plataforma</h1>
         <p className="muted">
           Accedé para cargar programas, actividades y controlar los
