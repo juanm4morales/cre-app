@@ -4,12 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>CRE APP</title>
+    <title>CREApp</title>
     <script>
       (function () {
         var theme = (function () {
           try { var s = localStorage.getItem('cre_theme'); if (s === 'dark' || s === 'light') return s; } catch (e) {}
-          return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          return 'light';
         })();
         document.documentElement.classList.add(theme);
       })();
