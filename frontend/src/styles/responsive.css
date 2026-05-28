@@ -163,7 +163,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.25rem;
-    color: var(--muted);
+    color: var(--color-gray-700);
     text-decoration: none;
     font-size: 0.7rem;
     font-weight: 500;
@@ -291,9 +291,14 @@
   }
 }
 
+:root.dark .mobile-nav-item {
+  color: var(--color-gray-300);
+}
+
 :root.dark .mobile-nav-item:hover,
 :root.dark .mobile-nav-item:active {
   background: var(--color-gray-800);
+  color: var(--color-white);
 }
 
 :root.dark .mobile-nav-item.active {
