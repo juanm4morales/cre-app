@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, Edit, ToggleRight, Trash2 } from 'lucide-react';
+import { Eye, Edit, ToggleRight, Trash2, Search, User, Mail, Shield, CheckCircle, XCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -51,6 +51,8 @@ function AdminUsuarios() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id?: number }>({
     open: false,
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   const {
     register,
@@ -157,12 +159,35 @@ function AdminUsuarios() {
     }
   };
 
-  const rows = usuarios.map((usuario) => ({
+  const filteredUsuarios = usuarios.filter((usuario) => {
+    const fullName = `${usuario.first_name} ${usuario.last_name}`.toLowerCase();
+    const username = usuario.username.toLowerCase();
+    const email = (usuario.email || '').toLowerCase();
+    const query = searchQuery.toLowerCase();
+    
+    const matchesSearch =
+      fullName.includes(query) ||
+      username.includes(query) ||
+      email.includes(query);
+      
+    const matchesStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && usuario.is_active) ||
+      (statusFilter === 'inactive' && !usuario.is_active);
+      
+    return matchesSearch && matchesStatus;
+  });
+
+  const rows = filteredUsuarios.map((usuario) => ({
     id: String(usuario.id),
     cells: [
       `${usuario.first_name} ${usuario.last_name}`.trim() || usuario.username,
       usuario.email || 'Sin email',
-      usuario.is_active ? 'Activo' : 'Inactivo',
+      usuario.is_active ? (
+        <span className="badge badge-success">Activo</span>
+      ) : (
+        <span className="badge badge-gray">Inactivo</span>
+      ),
       <div className="table-actions" key={`actions-${usuario.id}`}>
         <button
           className="icon-button"
@@ -236,11 +261,14 @@ function AdminUsuarios() {
       {showForm ? (
         <SectionCard title={editing ? 'Editar docente' : 'Alta de docente'}>
           <form className="form-grid" onSubmit={handleSubmit(onSubmit)}>
-            <div>
+            <div className="form-group">
+              <label className="form-label form-label-required">
+                <User size={16} /> Usuario
+              </label>
               <input
                 className={`input ${errors.username ? 'input-error' : ''}`}
                 type="text"
-                placeholder="Username"
+                placeholder="Ej. jgomez"
                 disabled={Boolean(editing)}
                 aria-invalid={errors.username ? 'true' : 'false'}
                 {...register('username')}
@@ -249,7 +277,10 @@ function AdminUsuarios() {
                 <span className="error-text" role="alert">{errors.username.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label form-label-required">
+                <Lock size={16} /> Contraseña
+              </label>
               <input
                 className={`input ${errors.password ? 'input-error' : ''}`}
                 type="password"
@@ -261,7 +292,10 @@ function AdminUsuarios() {
                 <span className="error-text" role="alert">{errors.password.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label">
+                <User size={16} /> Nombre
+              </label>
               <input
                 className={`input ${errors.first_name ? 'input-error' : ''}`}
                 type="text"
@@ -273,7 +307,10 @@ function AdminUsuarios() {
                 <span className="error-text" role="alert">{errors.first_name.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label">
+                <User size={16} /> Apellido
+              </label>
               <input
                 className={`input ${errors.last_name ? 'input-error' : ''}`}
                 type="text"
@@ -285,11 +322,14 @@ function AdminUsuarios() {
                 <span className="error-text" role="alert">{errors.last_name.message}</span>
               )}
             </div>
-            <div>
+            <div className="form-group">
+              <label className="form-label">
+                <Mail size={16} /> Email
+              </label>
               <input
                 className={`input ${errors.email ? 'input-error' : ''}`}
                 type="email"
-                placeholder="Email"
+                placeholder="ejemplo@uncuyo.edu.ar"
                 aria-invalid={errors.email ? 'true' : 'false'}
                 {...register('email')}
               />
@@ -297,7 +337,7 @@ function AdminUsuarios() {
                 <span className="error-text" role="alert">{errors.email.message}</span>
               )}
             </div>
-            <div className="form-actions">
+            <div className="form-actions form-field-full">
               <button className="button" type="submit" disabled={loading}>
                 {editing ? 'Guardar cambios' : 'Crear docente'}
               </button>
@@ -310,34 +350,93 @@ function AdminUsuarios() {
       ) : null}
 
       <SectionCard title="Listado de docentes">
-        <BasicTable columns={['Nombre', 'Email', 'Estado', 'Acciones']} rows={rows} pageSize={10} />
+        <div className="filter-toolbar">
+          <div className="filter-toolbar-search">
+            <Search size={18} />
+            <input
+              type="text"
+              className="input"
+              placeholder="Buscar por nombre, usuario o email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <div className="filter-toolbar-options">
+            <div className="filter-toolbar-select">
+              <select
+                className="select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+              >
+                <option value="all">Todos los estados</option>
+                <option value="active">Activos</option>
+                <option value="inactive">Inactivos</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {filteredUsuarios.length === 0 ? (
+          <p className="muted" style={{ padding: '1.5rem 1rem', textAlign: 'center' }}>
+            No se encontraron docentes con los filtros aplicados.
+          </p>
+        ) : (
+          <BasicTable columns={['Nombre', 'Email', 'Estado', 'Acciones']} rows={rows} pageSize={10} />
+        )}
       </SectionCard>
 
       {selected ? (
         <SectionCard title="Detalle de usuario">
           <div className="detail-grid">
-            <div>
-              <p className="eyebrow">Usuario</p>
-              <div>{selected.username}</div>
+            <div className="detail-item">
+              <div className="detail-item-header">
+                <span className="detail-item-icon"><User size={16} /></span>
+                <p className="eyebrow">Usuario</p>
+              </div>
+              <div className="detail-item-value">{selected.username}</div>
             </div>
-            <div>
-              <p className="eyebrow">Nombre</p>
-              <div>{`${selected.first_name} ${selected.last_name}`.trim() || 'Sin nombre'}</div>
+            <div className="detail-item">
+              <div className="detail-item-header">
+                <span className="detail-item-icon"><User size={16} /></span>
+                <p className="eyebrow">Nombre Completo</p>
+              </div>
+              <div className="detail-item-value">
+                {`${selected.first_name} ${selected.last_name}`.trim() || 'Sin nombre'}
+              </div>
             </div>
-            <div>
-              <p className="eyebrow">Email</p>
-              <div>{selected.email || 'Sin email'}</div>
+            <div className="detail-item">
+              <div className="detail-item-header">
+                <span className="detail-item-icon"><Mail size={16} /></span>
+                <p className="eyebrow">Email</p>
+              </div>
+              <div className="detail-item-value">{selected.email || 'Sin email'}</div>
             </div>
-            <div>
-              <p className="eyebrow">Rol</p>
-              <div>{selected.role}</div>
+            <div className="detail-item">
+              <div className="detail-item-header">
+                <span className="detail-item-icon"><Shield size={16} /></span>
+                <p className="eyebrow">Rol</p>
+              </div>
+              <div className="detail-item-value" style={{ textTransform: 'capitalize' }}>
+                {selected.role}
+              </div>
             </div>
-            <div>
-              <p className="eyebrow">Estado</p>
-              <div>{selected.is_active ? 'Activo' : 'Inactivo'}</div>
+            <div className="detail-item">
+              <div className="detail-item-header">
+                <span className="detail-item-icon">
+                  {selected.is_active ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                </span>
+                <p className="eyebrow">Estado</p>
+              </div>
+              <div className="detail-item-value">
+                {selected.is_active ? (
+                  <span className="badge badge-success">Activo</span>
+                ) : (
+                  <span className="badge badge-gray">Inactivo</span>
+                )}
+              </div>
             </div>
           </div>
-          <div className="form-actions" style={{ marginTop: '1rem' }}>
+          <div className="form-actions form-field-full" style={{ marginTop: '1.25rem' }}>
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>
               Cerrar
             </button>
