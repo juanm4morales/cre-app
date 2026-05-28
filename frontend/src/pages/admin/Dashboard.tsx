@@ -93,9 +93,9 @@ function AdminDashboard() {
     id: String(programa.id),
     cells: [
       programa.descripcion || `Programa ${programa.id}`,
-      programa.anio_academico,
+      <span className="badge badge-info" key={`year-${programa.id}`}>{programa.anio_academico}</span>,
       actividades.filter((a) => a.programa === programa.id).length || 'N/A',
-      <span className="table-row-pill" key={`status-${programa.id}`}>Activo</span>,
+      <span className="badge badge-success" key={`status-${programa.id}`}>Activo</span>,
     ],
   }));
 
