@@ -20,8 +20,8 @@ from django.urls import path, include
 from django.shortcuts import redirect
 
 urlpatterns = [
-    path('', lambda request: redirect('/admin/'), name='home'),
+    path('', lambda request: redirect('/django-admin/'), name='home'),
     path('healthz', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthz'),
-    path('admin/', admin.site.urls),
+    path('django-admin/', admin.site.urls),
     path('api/', include('config.api_urls')),
 ]

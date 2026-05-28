@@ -80,8 +80,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: ['.trycloudflare.com'],
       proxy: {
         '/api': proxyTarget('http://localhost:8000'),
-        '/admin': proxyTarget('http://localhost:8000'),
-        '/accounts': proxyTarget('http://localhost:8000'),
+        '/django-admin': proxyTarget('http://localhost:8000'),
         '/static': proxyTarget('http://localhost:8000'),
       },
     },

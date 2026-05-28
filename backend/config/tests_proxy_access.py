@@ -27,7 +27,7 @@ class ProxyAccessMiddlewareTest(TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_admin_request_without_proxy_secret_is_blocked(self):
-        response = self.client.get('/admin/')
+        response = self.client.get('/django-admin/')
 
         self.assertEqual(response.status_code, 403)
         self.assertIn('Acceso restringido', response.content.decode())

@@ -5,16 +5,40 @@
       "destination": "https://cre-app-7l7g.onrender.com/api/:path*"
     },
     {
-      "source": "/admin",
-      "destination": "https://cre-app-7l7g.onrender.com/admin/"
+      "source": "/django-admin",
+      "destination": "https://cre-app-7l7g.onrender.com/django-admin/"
     },
     {
-      "source": "/admin/:path*",
-      "destination": "https://cre-app-7l7g.onrender.com/admin/:path*"
+      "source": "/django-admin/:path*",
+      "destination": "https://cre-app-7l7g.onrender.com/django-admin/:path*"
     },
     {
       "source": "/static/:path*",
       "destination": "https://cre-app-7l7g.onrender.com/static/:path*"
+    },
+    {
+      "source": "/((?!api/|django-admin|static/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
     }
   ]
 }

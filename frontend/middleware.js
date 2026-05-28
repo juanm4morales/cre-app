@@ -3,7 +3,7 @@ import { next } from '@vercel/functions';
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
 
 export const config = {
-  matcher: ['/api/:path*', '/admin', '/admin/:path*', '/static/:path*'],
+  matcher: ['/api/:path*', '/django-admin', '/django-admin/:path*', '/static/:path*'],
 };
 
 export default function middleware(request) {

@@ -175,9 +175,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Auth redirects
-LOGIN_REDIRECT_URL = '/actividades/'
-LOGOUT_REDIRECT_URL = '/accounts/login/'
-LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/django-admin/'
+LOGOUT_REDIRECT_URL = '/django-admin/login/'
+LOGIN_URL = '/django-admin/login/'
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = env_list(
