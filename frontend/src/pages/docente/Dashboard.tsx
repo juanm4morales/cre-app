@@ -130,13 +130,17 @@ function DocenteDashboard() {
     id: String(idx),
     cells: [
       espacio.nombre,
-      espacio.programaActual ? `${currentYear}` : 'Sin programa actual',
+      espacio.programaActual ? (
+        <span className="badge badge-info" key={`year-${idx}`}>{currentYear}</span>
+      ) : (
+        <span className="badge badge-gray" key={`year-${idx}`}>Sin programa actual</span>
+      ),
       `${espacio.cantidadActividades} actividades`,
       `${espacio.totalHoras.toFixed(1)}h`,
       espacio.programaActual ? (
-        <span className="table-row-pill" key={`status-${idx}`}>Activo</span>
+        <span className="badge badge-success" key={`status-${idx}`}>Activo</span>
       ) : (
-        <span className="chip" key={`status-${idx}`}>Pendiente</span>
+        <span className="badge badge-warning" key={`status-${idx}`}>Pendiente</span>
       ),
     ],
   }));
