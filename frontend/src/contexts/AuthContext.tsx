@@ -80,17 +80,24 @@ function normalizeUser(data: unknown, fallbackName = 'Usuario'): AuthUser {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => loadStoredUser());
-  const [loading, setLoading] = useState(true);
+  const storedUser = loadStoredUser();
+  const [user, setUser] = useState<AuthUser | null>(() => storedUser);
+  // If we already have a stored user, we can render optimistically without blocking.
+  // The session will be verified in the background; if invalid, the user gets redirected.
+  const [loading, setLoading] = useState(!storedUser);
 
   useEffect(() => {
     let isMounted = true;
 
     const syncSession = async () => {
       try {
-        await api.get('/auth/csrf');
-        const response = await api.get('/auth/me');
-        const nextUser = normalizeUser(response.data);
+        // Fire CSRF and session check in parallel to avoid sequential round-trips
+        // (critical when the backend is cold-starting on Render's free tier).
+        const [, meResponse] = await Promise.all([
+          api.get('/auth/csrf'),
+          api.get('/auth/me'),
+        ]);
+        const nextUser = normalizeUser(meResponse.data);
 
         if (!isMounted) {
           return;
