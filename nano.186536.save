@@ -1,0 +1,30 @@
+1. Lo Realizado (Estado Actual de la Arquitectura)
+Hemos diseñado e iniciado el aprovisionamiento de una arquitectura desacoplada y de alta eficiencia, asegurando que todos los recursos se ubiquen en la región Chile Central bajo el grupo de recursos cre-app-rg para evitar latencias y cargos de red interregionales.
+
+A. Base de Datos (PostgreSQL Flexible Server) — ¡Configurada!
+Se configuró y aprovisionó con éxito el motor de persistencia relacional con los siguientes parámetros de costo cero :
+
+Servicio: Azure Database for PostgreSQL (Flexible Server).
+
+Plan de Cómputo: Standard_B1ms (1 vCore, 2 GiB de RAM), que califica para el beneficio estudiantil de 750 horas mensuales gratuitas (ejecución continua 24/7).
+
+Almacenamiento: Configurado estrictamente en 32 GiB de disco Premium SSD (límite de la capa gratuita).
+
+Crecimiento automático (Autogrow): Deshabilitado para evitar la expansión automática del disco y cobros accidentales.
+
+Copias de seguridad: Redundancia local (LRS) limitada a un periodo de retención de 7 días (con 32 GiB de backup gratuitos).
+
+Seguridad y Red: Acceso público habilitado, firewall configurado para Permitir servicios de Azure (conexión directa del backend) y tu dirección IP local añadida para pruebas de escritorio. Microsoft Defender for Cloud deshabilitado para evitar cobros de seguridad fija.
+
+B. Backend API (Azure App Service) — ¡Datos del Wizard Completados!
+Tomando como base las capturas de pantalla de tu configuración actual (Imágenes 1, 2 y 3), definimos los parámetros para el contenedor del backend:
+
+Nombre del recurso: cre-app-api (URL pública: https://cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net).
+
+Entorno de ejecución: Python 3.13 sobre Linux (óptimo para rendimiento y velocidad de despliegue con Gunicorn).
+
+Plan de precios: Gratis F1 (con un límite de 60 minutos de procesamiento de CPU diarios, 1 GB de RAM compartida y 1 GB de almacenamiento local).
+
+Omitir Base de Datos en el asistente (Imagen 2): Se dejó la opción de base de datos desmarcada, ya que la capa gratuita F1 no soporta la creación automatizada de bases de datos desde el wizard. Conectaremos manualmente tu PostgreSQL Flexible existente mediante variables de entorno.
+
+Omitir Implementación de GitHub en el asistente (Imagen 3): Se configuró como Deshabilitar, dado que Azure restringe la configuración inicial de GitHub Actions durante la creación de Web Apps que combinan el sistema operativo Linux y el plan gratuito F1. Esto se resolverá conectando el repositorio directamente desde el Centro de Despliegue post-creación.

@@ -67,6 +67,7 @@ interface Actividad {
   id: number;
   descripcion: string;
   horas: number;
+  programa: number;
   modalidad_trabajo: 'IND' | 'EQU';
   fecha_inicio_ta: string | null;
   fecha_fin_ta: string | null;
@@ -74,6 +75,17 @@ interface Actividad {
   es_ta: boolean;
   unidad_ids: number[];
 }
+
+interface EspacioCurricular {
+  id: number;
+  codigo: string;
+  nombre: string;
+  creditos: number;
+  horas_ip: number;
+  horas_ta: number;
+}
+
+type TALoadState = 'red' | 'yellow' | 'green' | 'neutral';
 
 function normalizeCollection<T>(data: PaginatedResponse<T> | T[] | null | undefined): T[] {
   if (!data) return [];
@@ -89,6 +101,24 @@ function dateToIso(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function getTAFeedbackState(projectedHours: number, targetHours: number): TALoadState {
+  if (targetHours <= 0) return 'neutral';
+  const ratio = projectedHours / targetHours;
+  if (ratio > 1) return 'red';
+  if (ratio >= 0.95) return 'green';
+  if (ratio >= 0.85) return 'yellow';
+  return 'neutral';
+}
+
+function getProgressWidth(value: number, target: number): string {
+  if (target <= 0) return '0%';
+  return `${Math.min(100, (value / target) * 100)}%`;
+}
+
+function formatHours(value: number): string {
+  return `${value.toFixed(1)}h`;
+}
+
 function DocentePlanificacionTA() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -97,6 +127,7 @@ function DocentePlanificacionTA() {
 
   const selectedPlanEcId = sessionStorage.getItem('selected_plan_estudio_ec_id');
   const selectedEspacioNombre = sessionStorage.getItem('selected_espacio_nombre');
+  const selectedEspacioId = Number(sessionStorage.getItem('selected_espacio_curricular_id') || 0);
 
   const [calendarMonth, setCalendarMonth] = useState(now.getMonth());
   const [rangeAnchor, setRangeAnchor] = useState<string | null>(null);
@@ -127,13 +158,20 @@ function DocentePlanificacionTA() {
     enabled: queryEnabled,
   });
 
+  const espaciosQuery = useQuery({
+    queryKey: ['espacios-asignados'],
+    queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then((r) => normalizeCollection(r.data)),
+    enabled: Boolean(selectedEspacioId),
+  });
+
   const programas = useMemo(() => programasQuery.data ?? [], [programasQuery.data]);
   const tipos = useMemo(() => tiposQuery.data ?? [], [tiposQuery.data]);
   const unidades = useMemo(() => unidadesQuery.data ?? [], [unidadesQuery.data]);
   const actividades = useMemo(() => actividadesQuery.data ?? [], [actividadesQuery.data]);
+  const espacios = useMemo(() => espaciosQuery.data ?? [], [espaciosQuery.data]);
 
   const loading = queryEnabled && (
-    programasQuery.isLoading || tiposQuery.isLoading || unidadesQuery.isLoading || actividadesQuery.isLoading
+    programasQuery.isLoading || tiposQuery.isLoading || unidadesQuery.isLoading || actividadesQuery.isLoading || espaciosQuery.isLoading
   );
 
   const {
@@ -175,7 +213,44 @@ function DocentePlanificacionTA() {
     return unidades.filter((unidad) => unidad.programa === programaActual.id).sort((a, b) => a.numero - b.numero);
   }, [programaActual, unidades]);
 
-  const actividadesTA = useMemo(() => actividades.filter((actividad) => actividad.es_ta), [actividades]);
+  const actividadesTA = useMemo(
+    () => actividades.filter((actividad) => actividad.es_ta && (!programaActual || actividad.programa === programaActual.id)),
+    [actividades, programaActual],
+  );
+
+  const selectedEspacio = useMemo(
+    () => espacios.find((espacio) => espacio.id === selectedEspacioId) || null,
+    [espacios, selectedEspacioId],
+  );
+
+  const horasTaActuales = useMemo(
+    () => actividadesTA.reduce((total, actividad) => total + Number(actividad.horas || 0), 0),
+    [actividadesTA],
+  );
+
+  const minutosDraft = Number(minutosValue);
+  const horasTaDraft = Number.isFinite(minutosDraft) && minutosDraft > 0 ? minutosDraft / 60 : 0;
+  const horasTaObjetivo = Number(selectedEspacio?.horas_ta || 0);
+  const horasTaProyectadas = horasTaActuales + horasTaDraft;
+  const taFeedbackState = getTAFeedbackState(horasTaProyectadas, horasTaObjetivo);
+  const taExcesoMinutos = Math.max(0, Math.round((horasTaProyectadas - horasTaObjetivo) * 60));
+  const taRestantesMinutos = Math.max(0, Math.round((horasTaObjetivo - horasTaProyectadas) * 60));
+
+  const taFeedbackMessage = useMemo(() => {
+    if (horasTaObjetivo <= 0) {
+      return 'Este espacio no tiene un objetivo de horas TA cargado. Podés ajustarlo desde Espacios.';
+    }
+    if (taFeedbackState === 'red') {
+      return `Con esta carga te pasarías por ${taExcesoMinutos} min del objetivo TA.`;
+    }
+    if (taFeedbackState === 'green') {
+      return 'Con esta carga quedás muy cerca del objetivo TA.';
+    }
+    if (taFeedbackState === 'yellow') {
+      return `Atención: quedarían ${taRestantesMinutos} min para llegar al objetivo TA.`;
+    }
+    return `Quedan ${taRestantesMinutos} min disponibles para actividades TA.`;
+  }, [horasTaObjetivo, taExcesoMinutos, taFeedbackState, taRestantesMinutos]);
 
   const taRangesByDate = useMemo(() => {
     const map = new Map<string, number>();
@@ -428,6 +503,30 @@ function DocentePlanificacionTA() {
             <div className="status-note status-note-neutral">
               El rango de fechas es opcional. Si no lo completas, la actividad queda asociada al programa y a las unidades elegidas.
             </div>
+
+            <div className={`ta-feedback-card ta-feedback-${taFeedbackState}`} aria-live="polite">
+              <div className="ta-feedback-header">
+                <div>
+                  <span className="ta-feedback-eyebrow">Feedback de carga TA</span>
+                  <strong>{taFeedbackMessage}</strong>
+                </div>
+                <span className="ta-feedback-ratio">
+                  {formatHours(horasTaProyectadas)} <small>/ {formatHours(horasTaObjetivo)}</small>
+                </span>
+              </div>
+              <div className={`ta-feedback-track ${taFeedbackState === 'red' ? 'track-overlimit' : ''}`}>
+                <span
+                  className={`ta-feedback-fill fill-${taFeedbackState}`}
+                  style={{ width: getProgressWidth(horasTaProyectadas, horasTaObjetivo) }}
+                />
+              </div>
+              <div className="ta-feedback-metrics">
+                <span>Actual: <strong>{formatHours(horasTaActuales)}</strong></span>
+                <span>Nueva actividad: <strong>{formatHours(horasTaDraft)}</strong></span>
+                <span>Objetivo TA: <strong>{formatHours(horasTaObjetivo)}</strong></span>
+              </div>
+            </div>
+
             <PlanningActivityCommonFields
               idPrefix="planificacion-ta"
               tipos={tiposTA}

@@ -80,6 +80,7 @@ function DocenteProgramas() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [unidadCompetenciasDraft, setUnidadCompetenciasDraft] = useState<Record<number, number[]>>({});
+  const [showCompetencias, setShowCompetencias] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [viewOnly, setViewOnly] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id?: number }>({
@@ -179,7 +180,7 @@ function DocenteProgramas() {
     queryFn: () => api.get<PaginatedResponse<Competencia>>('/competencias', {
       params: { plan_estudio_id: selectedPlanEc?.plan_estudio },
     }).then(res => res.data.results),
-    enabled: !!selectedPlanEc?.plan_estudio,
+    enabled: showCompetencias && !!selectedPlanEc?.plan_estudio,
   });
 
   const competenciasOrdenadas = useMemo(
@@ -522,6 +523,23 @@ function DocenteProgramas() {
                 </div>
               </form>
 
+              <div className="temporary-tool-callout mt-3">
+                <div>
+                  <strong>Competencias ocultas temporalmente.</strong>
+                  <p>
+                    Para priorizar el diseño de la planificación, la vinculación de competencias se omite por defecto.
+                    Podés volver a mostrarla si necesitás cargar esa trazabilidad.
+                  </p>
+                </div>
+                <button
+                  className="button button-ghost button-small"
+                  type="button"
+                  onClick={() => setShowCompetencias((value) => !value)}
+                >
+                  {showCompetencias ? 'Ocultar competencias' : 'Mostrar competencias'}
+                </button>
+              </div>
+
               <div className="unidades-competencias-grid">
                 {unidades.filter((u) => u.programa === editing.id).length === 0 ? (
                   <span className="chip">Aún no hay unidades cargadas.</span>
@@ -535,42 +553,54 @@ function DocenteProgramas() {
                           <span className="chip unidad-competencia-chip">
                             U{unidad.numero}: {unidad.descripcion}
                           </span>
-                          <span className="unidad-competencia-counter">
-                            {(unidadCompetenciasDraft[unidad.id] || []).length} seleccionadas
-                          </span>
+                          {showCompetencias ? (
+                            <span className="unidad-competencia-counter">
+                              {(unidadCompetenciasDraft[unidad.id] || []).length} seleccionadas
+                            </span>
+                          ) : (
+                            <span className="unidad-competencia-counter">Competencias omitidas</span>
+                          )}
                         </div>
-                        <select
-                          className="select competencias-select"
-                          multiple
-                          value={(unidadCompetenciasDraft[unidad.id] || []).map(String)}
-                          onChange={(event) => {
-                            const ids = Array.from(event.target.selectedOptions).map((option) =>
-                              Number(option.value)
-                            );
-                            setUnidadCompetenciasDraft((prev) => ({ ...prev, [unidad.id]: ids }));
-                          }}
-                          aria-label={`Competencias de unidad ${unidad.numero}`}
-                        >
-                          {competenciasOrdenadas.map((competencia) => (
-                            <option key={competencia.id} value={competencia.id}>
-                              {competencia.codigo} - {competencia.nombre}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="unidad-competencia-actions">
-                          <button
-                            className="button button-small"
-                            type="button"
-                            onClick={() => handleSaveUnidadCompetencias(unidad.id)}
-                          >
-                            Guardar competencias
-                          </button>
-                        </div>
+                        {showCompetencias ? (
+                          <>
+                            <select
+                              className="select competencias-select"
+                              multiple
+                              value={(unidadCompetenciasDraft[unidad.id] || []).map(String)}
+                              onChange={(event) => {
+                                const ids = Array.from(event.target.selectedOptions).map((option) =>
+                                  Number(option.value)
+                                );
+                                setUnidadCompetenciasDraft((prev) => ({ ...prev, [unidad.id]: ids }));
+                              }}
+                              aria-label={`Competencias de unidad ${unidad.numero}`}
+                            >
+                              {competenciasOrdenadas.map((competencia) => (
+                                <option key={competencia.id} value={competencia.id}>
+                                  {competencia.codigo} - {competencia.nombre}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="unidad-competencia-actions">
+                              <button
+                                className="button button-small"
+                                type="button"
+                                onClick={() => handleSaveUnidadCompetencias(unidad.id)}
+                              >
+                                Guardar competencias
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="muted unidades-competencias-help">
+                            Unidad disponible para planificar actividades sin seleccionar competencias.
+                          </p>
+                        )}
                       </div>
                     ))
                 )}
               </div>
-              {competenciasOrdenadas.length > 0 ? (
+              {showCompetencias && competenciasOrdenadas.length > 0 ? (
                 <p className="muted unidades-competencias-help">
                   Consejo: usa Ctrl (o Cmd en Mac) para seleccionar múltiples competencias en cada unidad.
                 </p>

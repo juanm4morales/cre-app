@@ -6,6 +6,22 @@ All frontend improvements have been documented comprehensively. Use this index t
 
 ## 📋 Documentation Files
 
+### 0. **FUNCIONALIDADES_TEMPORALES_DOCENTE.md** 🧪
+**Purpose**: Temporary teacher self-service feature documentation  
+**Audience**: Developers, QA, product owners  
+**Contents**:
+- Temporary scope and removal criteria
+- Teacher self-assignment and credit/hour editing endpoints
+- Competency omission/hide behavior
+- Warnings about real data writes
+
+**When to use**:
+- Testing teacher planning without official academic data
+- Reviewing temporary permissions before production hardening
+- Planning removal once institutional integrations are ready
+
+---
+
 ### 1. **FRONTEND_UI_IMPROVEMENTS.md** ⭐
 **Purpose**: Comprehensive implementation guide  
 **Audience**: Developers, code reviewers  
