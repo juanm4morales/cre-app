@@ -69,6 +69,7 @@ export default defineConfig(({ mode }) => {
   const tunnelPass = env.TUNNEL_BASIC_AUTH_PASS || ''
 
   return {
+    base: '/static/',
     plugins: [react(), tunnelBasicAuthPlugin(tunnelUser, tunnelPass)],
     test: {
       globals: true,

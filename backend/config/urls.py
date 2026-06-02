@@ -16,12 +16,12 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.http import HttpResponse
-from django.urls import path, include
-from django.shortcuts import redirect
+from django.urls import path, include, re_path
+from django.views.generic import TemplateView
 
 urlpatterns = [
-    path('', lambda request: redirect('/django-admin/'), name='home'),
     path('healthz', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthz'),
     path('django-admin/', admin.site.urls),
     path('api/', include('config.api_urls')),
+    re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
 ]
