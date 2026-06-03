@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { House, FolderKanban, ClipboardList, CalendarCheck2, CircleUserRound, BookOpen, UserCog, Layers, Moon, Sun } from 'lucide-react';
+import { House, FolderKanban, ClipboardList, CalendarCheck2, BookOpen, UserCog, Layers, Moon, Sun, FlaskConical } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
 interface MobileNavProps {
@@ -12,10 +12,10 @@ function MobileNav({ role }: MobileNavProps) {
 
   const getDocenteItems = () => [
     { to: '/docente/resumen', label: 'Inicio', icon: House, exact: true },
+    { to: '/docente/espacios', label: 'Prueba', icon: FlaskConical },
     { to: '/docente/programas', label: 'Programas', icon: FolderKanban },
     { to: '/docente/agenda-cursado', label: 'Agenda', icon: ClipboardList, prefixes: ['/docente/planificacion'] },
     { to: '/docente/ejecucion-ip', label: 'Seguimiento', icon: CalendarCheck2 },
-    { to: '/docente/perfil', label: 'Perfil', icon: CircleUserRound },
   ];
 
   const getAdminItems = () => [
