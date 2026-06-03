@@ -48,7 +48,7 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 PROXY_ACCESS_SECRET = os.getenv('PROXY_ACCESS_SECRET', '').strip()
-PROXY_ACCESS_EXEMPT_PATHS = tuple(env_list('PROXY_ACCESS_EXEMPT_PATHS', '/healthz'))
+PROXY_ACCESS_EXEMPT_PATHS = tuple(env_list('PROXY_ACCESS_EXEMPT_PATHS', '/healthz,/sadmin-creapp-panel/,/api/sadmin-creapp-panel/,/api/static/'))
 
 
 # Application definition
@@ -157,7 +157,7 @@ DEFAULT_CRE_HOURS = 25
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/api/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR.parent / 'frontend' / 'dist',
@@ -178,9 +178,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Auth redirects
-LOGIN_REDIRECT_URL = '/django-admin/'
-LOGOUT_REDIRECT_URL = '/django-admin/login/'
-LOGIN_URL = '/django-admin/login/'
+LOGIN_REDIRECT_URL = '/api/sadmin-creapp-panel/'
+LOGOUT_REDIRECT_URL = '/api/sadmin-creapp-panel/login/'
+LOGIN_URL = '/api/sadmin-creapp-panel/login/'
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = env_list(
