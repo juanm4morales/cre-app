@@ -64,15 +64,8 @@ class Command(BaseCommand):
 
             descripcion_base = self._clean_string(worksheet[f"B{row_number}"].value)
             ejemplos = self._clean_string(worksheet[f"C{row_number}"].value)
-            modalidad_individual = self._clean_string(worksheet[f"D{row_number}"].value)
-            modalidad_grupal = self._clean_string(worksheet[f"E{row_number}"].value)
             notas = self._clean_string(worksheet[f"F{row_number}"].value)
 
-            modalidad = self._infer_modalidad(
-                nombre=nombre,
-                individual_cell=modalidad_individual,
-                grupal_cell=modalidad_grupal,
-            )
             descripcion = self._compose_descripcion(
                 descripcion=descripcion_base,
                 ejemplos=ejemplos,
@@ -82,16 +75,14 @@ class Command(BaseCommand):
                 nombre=nombre,
                 descripcion=descripcion,
                 tipo_dedicacion=tipo_dedicacion,
-                modalidad_trabajo=modalidad,
             )
 
-    def _upsert_tipo_actividad(self, *, nombre: str, descripcion: str, tipo_dedicacion: str, modalidad_trabajo: str | None):
+    def _upsert_tipo_actividad(self, *, nombre: str, descripcion: str, tipo_dedicacion: str):
         tipo_actividad, created = TipoActividad.objects.get_or_create(
             nombre=nombre,
             defaults={
                 "descripcion": descripcion,
                 "tipo_dedicacion": tipo_dedicacion,
-                "modalidad_trabajo": modalidad_trabajo,
             },
         )
         if created:
@@ -105,9 +96,6 @@ class Command(BaseCommand):
         if tipo_actividad.tipo_dedicacion != tipo_dedicacion:
             tipo_actividad.tipo_dedicacion = tipo_dedicacion
             updated_fields.append("tipo_dedicacion")
-        if tipo_actividad.modalidad_trabajo != modalidad_trabajo:
-            tipo_actividad.modalidad_trabajo = modalidad_trabajo
-            updated_fields.append("modalidad_trabajo")
 
         if updated_fields:
             tipo_actividad.save(update_fields=updated_fields)
@@ -125,19 +113,6 @@ class Command(BaseCommand):
         if notas:
             chunks.append(f"Consideraciones: {notas}")
         return "\n\n".join(chunks)
-
-    def _infer_modalidad(self, *, nombre: str, individual_cell: str, grupal_cell: str) -> str | None:
-        nombre_lower = nombre.lower()
-        has_individual = bool(individual_cell) or "individual" in nombre_lower
-        has_grupal = bool(grupal_cell) or "grupal" in nombre_lower
-
-        if has_individual and has_grupal:
-            return None
-        if has_individual:
-            return TipoActividad.ModalidadTrabajo.INDIVIDUAL
-        if has_grupal:
-            return TipoActividad.ModalidadTrabajo.GRUPO
-        return None
 
     def _print_summary(self) -> None:
         counters = self.stats["tipo_actividad"]

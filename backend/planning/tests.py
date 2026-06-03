@@ -509,15 +509,14 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
 
         lectura = TipoActividad.objects.get(nombre="Lectura y comprensión de bibliografía")
         self.assertEqual(lectura.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
-        self.assertIsNone(lectura.modalidad_trabajo)
         self.assertIn("Ejemplos:", lectura.descripcion)
         self.assertIn("Consideraciones:", lectura.descripcion)
 
         individual = TipoActividad.objects.get(nombre="Resolución de trabajos prácticos individuales")
-        self.assertEqual(individual.modalidad_trabajo, TipoActividad.ModalidadTrabajo.INDIVIDUAL)
+        self.assertEqual(individual.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
 
         grupal = TipoActividad.objects.get(nombre="Resolución de trabajos prácticos grupales")
-        self.assertEqual(grupal.modalidad_trabajo, TipoActividad.ModalidadTrabajo.GRUPO)
+        self.assertEqual(grupal.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
 
         otros = TipoActividad.objects.get(nombre="Otros")
         self.assertEqual(otros.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
@@ -1017,4 +1016,3 @@ class PlanningFullFlowIntegrationTest(TestCase):
         )
         # 404 because scoped query excludes it → get_object raises Http404
         self.assertEqual(resp.status_code, 404)
-

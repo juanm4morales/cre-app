@@ -36,7 +36,7 @@ def _docente_asignado(user, espacio_curricular_id, session=None):
 class TipoActividadSerializer(serializers.ModelSerializer):
     class Meta:
         model = TipoActividad
-        fields = ["id", "nombre", "descripcion", "tipo_dedicacion", "modalidad_trabajo"]
+        fields = ["id", "nombre", "descripcion", "tipo_dedicacion"]
 
 
 class AsignacionDocenteSerializer(serializers.ModelSerializer):

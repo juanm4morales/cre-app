@@ -11,6 +11,7 @@ interface Actividad {
   tipo_actividad: number;
   descripcion: string;
   horas: number;
+  modalidad_trabajo: 'IND' | 'EQU';
 }
 
 interface Programa {
@@ -68,6 +69,7 @@ function AdminActividades() {
     cells: [
       actividad.descripcion,
       tipoLookup.get(actividad.tipo_actividad) || `Tipo ${actividad.tipo_actividad}`,
+      actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal',
       `${actividad.horas}h`,
       programaLookup.get(actividad.programa) || `Programa ${actividad.programa}`,
       <div className="table-actions" key={`actions-${actividad.id}`}>
@@ -107,7 +109,7 @@ function AdminActividades() {
 
       <SectionCard title="Listado de actividades">
         <BasicTable
-          columns={['Actividad', 'Tipo', 'Horas', 'Programa', 'Acciones']}
+          columns={['Actividad', 'Tipo', 'Modalidad', 'Horas', 'Programa', 'Acciones']}
           rows={rows}
           pageSize={10}
         />
@@ -131,6 +133,10 @@ function AdminActividades() {
             <div>
               <p className="eyebrow">Horas</p>
               <div>{selected.horas}h</div>
+            </div>
+            <div>
+              <p className="eyebrow">Modalidad</p>
+              <div>{selected.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal'}</div>
             </div>
           </div>
           <div className="form-actions mt-3">
