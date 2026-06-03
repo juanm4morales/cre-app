@@ -37,6 +37,11 @@ function IndexRedirect() {
   return <Navigate to={role === 'admin' ? '/admin' : '/docente'} replace />;
 }
 
+function SadminRedirect() {
+  window.location.href = '/sadmin-creapp-panel/';
+  return <RouteLoading />;
+}
+
 function RouteLoading() {
   return (
     <div className="route-loading">
@@ -103,6 +108,8 @@ function App() {
             </Route>
           </Route>
 
+          <Route path="/sadmin-creapp-panel" element={<SadminRedirect />} />
+          <Route path="/sadmin-creapp-panel/*" element={<SadminRedirect />} />
           <Route path="/" element={<IndexRedirect />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>

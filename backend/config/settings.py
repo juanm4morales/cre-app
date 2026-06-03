@@ -48,7 +48,7 @@ if not SECRET_KEY:
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
 PROXY_ACCESS_SECRET = os.getenv('PROXY_ACCESS_SECRET', '').strip()
-PROXY_ACCESS_EXEMPT_PATHS = tuple(env_list('PROXY_ACCESS_EXEMPT_PATHS', '/healthz'))
+PROXY_ACCESS_EXEMPT_PATHS = tuple(env_list('PROXY_ACCESS_EXEMPT_PATHS', '/healthz,/sadmin-creapp-panel/'))
 
 
 # Application definition
@@ -178,9 +178,9 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Auth redirects
-LOGIN_REDIRECT_URL = '/django-admin/'
-LOGOUT_REDIRECT_URL = '/django-admin/login/'
-LOGIN_URL = '/django-admin/login/'
+LOGIN_REDIRECT_URL = '/sadmin-creapp-panel/'
+LOGOUT_REDIRECT_URL = '/sadmin-creapp-panel/login/'
+LOGIN_URL = '/sadmin-creapp-panel/login/'
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = env_list(

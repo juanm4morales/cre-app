@@ -21,7 +21,7 @@ from django.views.generic import TemplateView
 
 urlpatterns = [
     path('healthz', lambda request: HttpResponse('ok', content_type='text/plain'), name='healthz'),
-    path('django-admin/', admin.site.urls),
+    path('sadmin-creapp-panel/', admin.site.urls),
     path('api/', include('config.api_urls')),
     re_path(r'^.*$', TemplateView.as_view(template_name='index.html')),
 ]

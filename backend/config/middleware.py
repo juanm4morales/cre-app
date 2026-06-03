@@ -24,7 +24,8 @@ class ProxyAccessMiddleware:
         return self._blocked_response(request)
 
     def _is_exempt_path(self, path):
-        return path in getattr(settings, 'PROXY_ACCESS_EXEMPT_PATHS', ())
+        exempt_paths = getattr(settings, 'PROXY_ACCESS_EXEMPT_PATHS', ())
+        return any(path.startswith(exempt) for exempt in exempt_paths)
 
     def _has_valid_proxy_secret(self, request):
         proxy_secret = getattr(settings, 'PROXY_ACCESS_SECRET', '')
