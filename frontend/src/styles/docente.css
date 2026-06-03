@@ -1287,6 +1287,12 @@ button.planning-compact-item:hover {
   border: 1px solid var(--color-gray-200);
 }
 
+.workload-progress-stack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.85rem;
+}
+
 :root.dark .unified-workload-progress {
   background: color-mix(in srgb, var(--color-gray-800) 30%, transparent);
   border-color: var(--color-gray-800);
@@ -1296,6 +1302,8 @@ button.planning-compact-item:hover {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .workload-progress-header span {
@@ -1352,12 +1360,27 @@ button.planning-compact-item:hover {
   border-radius: 4px;
   transition: width var(--transition-slow);
   max-width: 100%;
+  background: linear-gradient(90deg, var(--color-primary-500), var(--color-primary-400));
 }
 
-.workload-progress-fill.fill-green { background: var(--color-success); }
-.workload-progress-fill.fill-yellow { background: var(--color-warning); }
-.workload-progress-fill.fill-red { background: var(--color-danger); }
-.workload-progress-fill.fill-neutral { background: var(--color-primary-500); }
+.workload-progress-fill.fill-yellow {
+  filter: saturate(1.15) brightness(1.02);
+}
+
+.workload-progress-fill.fill-green {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success) 34%, transparent) inset;
+}
+
+.workload-progress-fill.fill-red {
+  background: linear-gradient(90deg, var(--color-danger), #fb7185);
+}
+
+.workload-progress-note {
+  margin: 0;
+  color: var(--color-text-base);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
 
 .unified-workload-metrics {
   display: grid;

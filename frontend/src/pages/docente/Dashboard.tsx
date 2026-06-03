@@ -54,10 +54,6 @@ interface ClaseCalendario {
   fecha: string;
 }
 
-interface ConfiguracionCRE {
-  horas_por_cre: number;
-}
-
 interface PaginatedResponse<T> {
   results: T[];
 }
@@ -71,13 +67,14 @@ interface EspacioResumen {
   horasIpPlanificadas: number;
   horasTaPlanificadas: number;
   horasObjetivoTa: number;
-  horasObjetivoTotal: number;
-  cargaHorariaTotal: number;
   cantidadActividades: number;
   cantidadActividadesIp: number;
   cantidadActividadesTa: number;
-  loadState: LoadState;
-  excesoMinutos: number;
+  ipState: LoadState;
+  taState: LoadState;
+  combinedState: LoadState;
+  excesoIpMinutos: number;
+  excesoTaMinutos: number;
 }
 
 type LoadState = 'red' | 'yellow' | 'green' | 'neutral';
@@ -144,16 +141,22 @@ function getPlanEcEspacioId(planEc: PlanEstudioEC): number | null {
 function getLoadState(usedHours: number, targetHours: number): LoadState {
   if (targetHours <= 0) return 'neutral';
   const ratio = usedHours / targetHours;
-  if (ratio > 1) return 'red';
-  if (ratio >= 0.95) return 'green';
-  if (ratio >= 0.85) return 'yellow';
+  if (ratio > 1.03) return 'red';
+  if (ratio >= 0.95 && ratio <= 1) return 'green';
+  return 'yellow';
+}
+
+function getCombinedLoadState(ipState: LoadState, taState: LoadState): LoadState {
+  if (ipState === 'red' || taState === 'red') return 'red';
+  if (ipState === 'yellow' || taState === 'yellow') return 'yellow';
+  if (ipState === 'green' || taState === 'green') return 'green';
   return 'neutral';
 }
 
-function getLoadStatusLabel(state: LoadState, excesoMinutos: number): string {
-  if (state === 'red') return `Excedido por ${excesoMinutos} min`;
+function getCombinedStatusLabel(state: LoadState): string {
+  if (state === 'red') return 'Revisar exceso';
+  if (state === 'yellow') return 'A revisar';
   if (state === 'green') return 'En objetivo';
-  if (state === 'yellow') return 'Cerca del límite';
   return 'En progreso';
 }
 
@@ -195,11 +198,6 @@ function DocenteDashboard() {
   const { data: espacios = [], isLoading: loadingEspacios } = useQuery({
     queryKey: ['espacios-asignados'],
     queryFn: () => api.get<EspacioCurricular[] | PaginatedResponse<EspacioCurricular>>('/espacios-asignados').then(res => normalizeCollection(res.data)),
-  });
-
-  const { data: configuraciones = [] } = useQuery({
-    queryKey: ['configuracion-cre'],
-    queryFn: () => api.get<PaginatedResponse<ConfiguracionCRE>>('/configuracion-cre').then(res => normalizeCollection(res.data)),
   });
 
   const loading = loadingProgramas || loadingActividades || loadingTipos || loadingClases || loadingPlanesEC || loadingEspacios;
@@ -248,8 +246,6 @@ function DocenteDashboard() {
     return actividades.filter((actividad) => ids.has(actividad.programa));
   }, [actividades, programaActualIds, programasIds]);
 
-  const horasPorCredito = configuraciones[0]?.horas_por_cre ?? 27;
-
   const espaciosResumen = useMemo(() => {
     const actividadPorPrograma = new Map<number, Actividad[]>();
     actividadesCiclo.forEach((actividad) => {
@@ -272,10 +268,11 @@ function DocenteDashboard() {
       ), 0);
       const horasIpBase = Number(espacio.horas_ip || 0);
       const horasObjetivoTa = Number(espacio.horas_ta || 0);
-      const horasObjetivoTotal = horasIpBase + horasObjetivoTa || Number(espacio.creditos || 0) * horasPorCredito;
-      const horasIpComputables = Math.max(horasIpBase, horasIpPlanificadas);
-      const cargaHorariaTotal = horasIpComputables + horasTaPlanificadas;
-      const excesoMinutos = Math.max(0, Math.round((cargaHorariaTotal - horasObjetivoTotal) * 60));
+      const excesoIpMinutos = Math.max(0, Math.round((horasIpPlanificadas - horasIpBase) * 60));
+      const excesoTaMinutos = Math.max(0, Math.round((horasTaPlanificadas - horasObjetivoTa) * 60));
+      const ipState = getLoadState(horasIpPlanificadas, horasIpBase);
+      const taState = getLoadState(horasTaPlanificadas, horasObjetivoTa);
+      const combinedState = getCombinedLoadState(ipState, taState);
 
       return {
         id: espacio.id,
@@ -286,29 +283,31 @@ function DocenteDashboard() {
         horasIpPlanificadas,
         horasTaPlanificadas,
         horasObjetivoTa,
-        horasObjetivoTotal,
-        cargaHorariaTotal,
         cantidadActividades: actividadesEspacio.length,
         cantidadActividadesIp: actividadesIp.length,
         cantidadActividadesTa: actividadesTa.length,
-        loadState: getLoadState(cargaHorariaTotal, horasObjetivoTotal),
-        excesoMinutos,
+        ipState,
+        taState,
+        combinedState,
+        excesoIpMinutos,
+        excesoTaMinutos,
       };
     });
-  }, [actividadesCiclo, currentYear, espaciosSeleccionados, horasPorCredito, programasDelEspacioSeleccionado, tiposMap]);
+  }, [actividadesCiclo, currentYear, espaciosSeleccionados, programasDelEspacioSeleccionado, tiposMap]);
 
   useEffect(() => {
-    espaciosResumen
-      .filter((espacio) => espacio.excesoMinutos > 0)
-      .forEach((espacio) => {
-        const notificationKey = `cre_overload_notified_${currentYear}_${espacio.id}_${espacio.excesoMinutos}`;
+    espaciosResumen.forEach((espacio) => {
+      [
+        { tipo: 'IP', minutos: espacio.excesoIpMinutos },
+        { tipo: 'TA', minutos: espacio.excesoTaMinutos },
+      ].forEach(({ tipo, minutos }) => {
+        if (minutos <= 0) return;
+        const notificationKey = `cre_overload_notified_${currentYear}_${espacio.id}_${tipo}_${minutos}`;
         if (sessionStorage.getItem(notificationKey)) return;
         sessionStorage.setItem(notificationKey, '1');
-        toast.warning(
-          `${espacio.nombre}: te pasaste por ${espacio.excesoMinutos} minutos de la carga horaria objetivo.`,
-          { duration: 6500 },
-        );
+        toast.warning(`${espacio.nombre}: te pasaste por ${minutos} minutos en actividades ${tipo}.`, { duration: 6500 });
       });
+    });
   }, [espaciosResumen, currentYear]);
 
   const activityStartCounts = useMemo(() => {
@@ -352,7 +351,7 @@ function DocenteDashboard() {
       <section className="page-header docente-hero">
         <div>
           <p className="eyebrow">Panel docente</p>
-          <h2>Planificación dinámica de actividades y tiempo</h2>
+          <h2>Planificación de actividades y tiempo</h2>
           {espacioActual ? (
             <div className="hero-context-info">
               <p>
@@ -366,16 +365,16 @@ function DocenteDashboard() {
                   Actividades TA: <strong>{espacioActual.cantidadActividadesTa}</strong>
                 </span>
                 <span className="hero-meta-item">
-                  Carga horaria: <strong>{espacioActual.cargaHorariaTotal.toFixed(1)}h</strong> / {espacioActual.horasObjetivoTotal.toFixed(1)}h
+                  IP: <strong>{espacioActual.horasIpPlanificadas.toFixed(1)}h</strong> / {espacioActual.horasIpBase.toFixed(1)}h
                 </span>
-                <span className={`hero-meta-status status-${espacioActual.loadState}`}>
-                  {getLoadStatusLabel(espacioActual.loadState, espacioActual.excesoMinutos)}
+                <span className="hero-meta-item">
+                  TA: <strong>{espacioActual.horasTaPlanificadas.toFixed(1)}h</strong> / {espacioActual.horasObjetivoTa.toFixed(1)}h
                 </span>
               </div>
             </div>
           ) : (
             <p>
-              Explorá ventanas semanales o mensuales, separá IP/TA y controlá la carga horaria contra los créditos/horas del espacio curricular.
+              Explorá ventanas semanales o mensuales y controlá por separado el avance de actividades IP y TA.
             </p>
           )}
         </div>
@@ -394,7 +393,7 @@ function DocenteDashboard() {
         ) : espaciosResumen.length === 0 ? (
           <div className="content-empty">
             <MinusCircle size={24} />
-            <p>Seleccioná un espacio curricular para ver su carga horaria, actividades y objetivo.</p>
+            <p>Seleccioná un espacio curricular para ver sus actividades y objetivos IP/TA.</p>
             <Link className="button" to="/docente/espacios">Seleccionar espacio</Link>
           </div>
         ) : (
@@ -406,21 +405,46 @@ function DocenteDashboard() {
                     <h3>{espacio.nombre}</h3>
                     <span className="unified-workload-code">{espacio.codigo}</span>
                   </div>
-                  <span className={`workload-status-badge status-${espacio.loadState}`}>
-                    {getLoadStatusLabel(espacio.loadState, espacio.excesoMinutos)}
+                  <span className={`workload-status-badge status-${espacio.combinedState}`}>
+                    {getCombinedStatusLabel(espacio.combinedState)}
                   </span>
                 </div>
 
-                <div className="unified-workload-progress">
-                  <div className="workload-progress-header">
-                    <span>Progreso de carga horaria</span>
-                    <strong>{espacio.cargaHorariaTotal.toFixed(1)} <small>/ {espacio.horasObjetivoTotal.toFixed(1)}h</small></strong>
+                <div className="workload-progress-stack">
+                  <div className="unified-workload-progress">
+                    <div className="workload-progress-header">
+                      <span>Carga IP</span>
+                      <strong>{espacio.horasIpPlanificadas.toFixed(1)}h <small>/ {espacio.horasIpBase.toFixed(1)}h objetivo</small></strong>
+                    </div>
+                    <div className={`workload-progress-track ${espacio.ipState === 'red' ? 'track-overlimit' : ''}`}>
+                      <div
+                        className={`workload-progress-fill fill-${espacio.ipState}`}
+                        style={{ width: getProgressWidth(espacio.horasIpPlanificadas, espacio.horasIpBase) }}
+                      />
+                    </div>
+                    <p className="workload-progress-note">
+                      {espacio.excesoIpMinutos > 0
+                        ? `Exceso IP: ${espacio.excesoIpMinutos} min.`
+                        : 'Horas de actividades IP planificadas contra las horas IP objetivo del espacio.'}
+                    </p>
                   </div>
-                  <div className={`workload-progress-track ${espacio.loadState === 'red' ? 'track-overlimit' : ''}`}>
-                    <div 
-                      className={`workload-progress-fill fill-${espacio.loadState}`}
-                      style={{ width: getProgressWidth(espacio.cargaHorariaTotal, espacio.horasObjetivoTotal) }} 
-                    />
+
+                  <div className="unified-workload-progress">
+                    <div className="workload-progress-header">
+                      <span>Carga TA</span>
+                      <strong>{espacio.horasTaPlanificadas.toFixed(1)}h <small>/ {espacio.horasObjetivoTa.toFixed(1)}h objetivo</small></strong>
+                    </div>
+                    <div className={`workload-progress-track ${espacio.taState === 'red' ? 'track-overlimit' : ''}`}>
+                      <div
+                        className={`workload-progress-fill fill-${espacio.taState}`}
+                        style={{ width: getProgressWidth(espacio.horasTaPlanificadas, espacio.horasObjetivoTa) }}
+                      />
+                    </div>
+                    <p className="workload-progress-note">
+                      {espacio.excesoTaMinutos > 0
+                        ? `Exceso TA: ${espacio.excesoTaMinutos} min.`
+                        : 'Horas de actividades TA planificadas contra las horas TA objetivo del espacio.'}
+                    </p>
                   </div>
                 </div>
 
@@ -434,23 +458,19 @@ function DocenteDashboard() {
                     <strong className="unified-metric-value">{espacio.cantidadActividadesTa}</strong>
                   </div>
                   <div className="unified-metric">
-                    <span className="unified-metric-label">Horas IP planificadas</span>
+                    <span className="unified-metric-label">Horas IP</span>
                     <strong className="unified-metric-value">
-                      {espacio.horasIpPlanificadas.toFixed(1)}h <small>/ {espacio.horasIpBase.toFixed(1)}h base</small>
+                      {espacio.horasIpPlanificadas.toFixed(1)}h <small>/ {espacio.horasIpBase.toFixed(1)}h objetivo</small>
                     </strong>
                   </div>
                   <div className="unified-metric">
-                    <span className="unified-metric-label">Horas TA planificadas</span>
+                    <span className="unified-metric-label">Horas TA</span>
                     <strong className="unified-metric-value">
                       {espacio.horasTaPlanificadas.toFixed(1)}h <small>/ {espacio.horasObjetivoTa.toFixed(1)}h objetivo</small>
                     </strong>
                   </div>
                   <div className="unified-metric">
-                    <span className="unified-metric-label">Carga horaria total</span>
-                    <strong className={`unified-metric-value value-${espacio.loadState}`}>{espacio.cargaHorariaTotal.toFixed(1)}h</strong>
-                  </div>
-                  <div className="unified-metric">
-                    <span className="unified-metric-label">Inicios en ventana</span>
+                    <span className="unified-metric-label">Actividades en período</span>
                     <strong className="unified-metric-value">{totalActividadesVentana}</strong>
                   </div>
                 </div>
@@ -460,7 +480,7 @@ function DocenteDashboard() {
                     <Link to="/docente/programas" className="button">Crear programa {currentYear}</Link>
                   ) : espacio.cantidadActividades === 0 ? (
                     <Link to="/docente/planificacion-ta" className="button">Planificar primera actividad</Link>
-                  ) : espacio.loadState === 'red' ? (
+                  ) : espacio.combinedState === 'red' ? (
                     <Link to="/docente/planificacion-ta" className="button button-danger">Revisar carga de actividades</Link>
                   ) : (
                     <>
