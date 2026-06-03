@@ -4,3 +4,4 @@
 - `DashboardLayout.tsx` always renders `Sidebar`, `Topbar`, and `MobileNav`; `responsive.css` hides the sidebar and shows the bottom nav at the mobile breakpoint.
 - `MobileNav.tsx` keeps admin mobile navigation to five items: its `prefixes` can mark admin catalog routes active, but they do not create direct navigation entries.
 - Desktop sidebar height is fixed to the viewport; adding admin nav items should keep `.sidebar-nav` as the internal scroll area and leave the theme toggle outside/pinned.
+- `/docente/espacios` is intentionally isolated under the temporary "Prueba docente" / "Prueba" navigation with `FlaskConical`, not inside core planning; keep that framing if you move or rename the route.
