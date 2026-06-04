@@ -33,7 +33,10 @@ venv/
 # IDE / config
 .agents
 .opencode/
-.github
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/*.yml
 .vscode/
 
 # Docker
