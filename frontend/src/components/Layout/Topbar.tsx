@@ -32,7 +32,7 @@ function isPaginatedResponse<T>(value: unknown): value is PaginatedResponse<T> {
 
 const ROUTE_LABELS: Record<string, string> = {
   '/docente/resumen': 'Inicio',
-  '/docente/espacios': 'Selección de espacio',
+  '/docente/espacios': 'Espacios curriculares (prueba)',
   '/docente/programas': 'Programas',
   '/docente/agenda-cursado': 'Planificación / Agenda de cursado',
   '/docente/dias-cursado': 'Planificación / Agenda de cursado',

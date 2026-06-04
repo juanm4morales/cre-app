@@ -909,7 +909,7 @@ function DocenteActividades() {
         actividad.descripcion,
         tipoLookup.get(actividad.tipo_actividad) || `Tipo ${actividad.tipo_actividad}`,
         `${Math.round(Number(actividad.horas) * 60)} min`,
-        actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Equipo',
+        actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal',
         (actividad.unidad_ids || [])
           .map((id) => unidadLookup.get(id) || `Unidad ${id}`)
           .join(', '),
@@ -1355,7 +1355,7 @@ function DocenteActividades() {
                       {...registerActividad('modalidad_trabajo')}
                     >
                       <option value="IND">Trabajo individual</option>
-                      <option value="EQU">Trabajo en equipo</option>
+                      <option value="EQU">Trabajo grupal</option>
                     </select>
                     {errorsActividad.modalidad_trabajo && (
                       <span className="error-text" role="alert">{errorsActividad.modalidad_trabajo.message}</span>
@@ -1680,7 +1680,7 @@ function DocenteActividades() {
                             <div>
                               <strong>{actividad.descripcion}</strong>
                               <p>
-                                {Math.round(Number(actividad.horas) * 60)} min | {actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Equipo'}
+                                {Math.round(Number(actividad.horas) * 60)} min | {actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal'}
                               </p>
                             </div>
                             <button

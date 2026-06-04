@@ -440,10 +440,6 @@ class TipoActividad(models.Model):
         INTERACCION_PEDAGOGICA = "IP", "Interacción Pedagógica (IP)"
         TRABAJO_AUTONOMO = "TA", "Trabajo Autónomo (TA)"
     
-    class ModalidadTrabajo(models.TextChoices):
-        GRUPO = "GRU", "Trabajo en Grupo"
-        INDIVIDUAL = "IND", "Trabajo Individual"
-    
     nombre = models.CharField(
         max_length=100,
         unique=True,
@@ -461,14 +457,6 @@ class TipoActividad(models.Model):
         default=TipoDedicacion.TRABAJO_AUTONOMO,
         choices=TipoDedicacion.choices,
         help_text="Tipo de dedicación de la actividad"
-    )
-    
-    modalidad_trabajo = models.CharField(
-        max_length=5,
-        choices=ModalidadTrabajo.choices,
-        null=True,
-        blank=True,
-        help_text="Modalidad de trabajo de la actividad (opcional)"
     )
     
     class Meta:
@@ -498,7 +486,7 @@ class Actividad(models.Model):
     """
     class ModalidadTrabajo(models.TextChoices):
         INDIVIDUAL = "IND", "Trabajo Individual"
-        EQUIPO = "EQU", "Trabajo en Equipo"
+        EQUIPO = "EQU", "Trabajo Grupal"
 
     programa = models.ForeignKey(
         Programa,

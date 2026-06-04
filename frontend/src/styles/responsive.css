@@ -372,14 +372,14 @@
     min-height: 44px;
   }
 
-  /* Calendar scroll wrapper for small screens */
   .calendar-scroll-wrap {
-    overflow-x: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
   .calendar-grid {
-    min-width: 340px;
+    width: 100%;
+    min-width: 0;
   }
 }
 
@@ -420,9 +420,23 @@
   }
 
   .calendar-cell {
-    min-height: 56px;
+    min-width: 0;
+    min-height: 0;
     padding: 0.35rem;
     font-size: 0.82rem;
+  }
+
+  .calendar-cell-icon {
+    position: absolute;
+    top: 0.34rem;
+    right: 0.34rem;
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+
+  .calendar-cell-icon svg {
+    width: 12px;
+    height: 12px;
   }
 
   .calendar-cell .calendar-day-number,
@@ -491,7 +505,7 @@
 
   .calendar-grid {
     gap: 0.22rem;
-    min-width: 300px;
+    min-width: 0;
   }
 
   .calendar-scroll-wrap {
@@ -514,14 +528,26 @@
   }
 
   .calendar-cell {
-    min-height: 54px;
-    padding: 0.3rem;
+    padding: 0.24rem;
     font-size: 0.78rem;
   }
 
+  .calendar-cell .calendar-day-number,
+  .calendar-cell > span:first-child {
+    min-width: 1.32rem;
+    height: 1.32rem;
+  }
+
   .calendar-cell-icon {
-    width: 1.35rem;
-    height: 1.35rem;
+    top: 0.24rem;
+    right: 0.24rem;
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .calendar-cell-icon svg {
+    width: 10px;
+    height: 10px;
   }
 
   .calendar-cell-badge {
@@ -613,20 +639,32 @@
   }
 
   .calendar-grid {
-    min-width: 280px;
+    gap: 0.18rem;
+    min-width: 0;
   }
 
   .calendar-cell {
-    min-height: 52px;
-    padding: 0.25rem;
+    padding: 0.2rem;
     font-size: 0.72rem;
   }
 
   .calendar-cell .calendar-day-number,
   .calendar-cell > span:first-child {
-    min-width: 1.45rem;
-    height: 1.45rem;
+    min-width: 1.2rem;
+    height: 1.2rem;
     border-radius: 0.55rem;
+  }
+
+  .calendar-cell-icon {
+    top: 0.16rem;
+    right: 0.16rem;
+    width: 0.72rem;
+    height: 0.72rem;
+  }
+
+  .calendar-cell-icon svg {
+    width: 8px;
+    height: 8px;
   }
 }
 

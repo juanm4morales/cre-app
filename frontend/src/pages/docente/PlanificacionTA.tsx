@@ -384,7 +384,7 @@ function DocentePlanificacionTA() {
     cells: [
       actividad.descripcion,
       `${Math.round(Number(actividad.horas) * 60)} min`,
-      actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Equipo',
+      actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal',
       actividad.fecha_inicio_ta && actividad.fecha_fin_ta
         ? `${actividad.fecha_inicio_ta} a ${actividad.fecha_fin_ta}`
         : '-',

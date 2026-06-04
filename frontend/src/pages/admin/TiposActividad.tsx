@@ -13,7 +13,6 @@ import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 const tipoActividadSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
   tipo_dedicacion: z.string().optional(),
-  modalidad_trabajo: z.string().optional(),
   descripcion: z.string().optional(),
 });
 
@@ -24,7 +23,6 @@ interface TipoActividad {
   nombre: string;
   descripcion: string;
   tipo_dedicacion: string;
-  modalidad_trabajo: string;
 }
 
 interface PaginatedResponse<T> {
@@ -51,7 +49,6 @@ function AdminTiposActividad() {
     defaultValues: {
       nombre: '',
       tipo_dedicacion: '',
-      modalidad_trabajo: '',
       descripcion: '',
     },
   });
@@ -78,7 +75,7 @@ function AdminTiposActividad() {
   useApiAutoRefresh(() => loadTipos(true), []);
 
   const resetForm = () => {
-    reset({ nombre: '', descripcion: '', tipo_dedicacion: '', modalidad_trabajo: '' });
+    reset({ nombre: '', descripcion: '', tipo_dedicacion: '' });
     setEditing(null);
     setShowForm(false);
   };
@@ -111,7 +108,6 @@ function AdminTiposActividad() {
       nombre: tipo.nombre,
       descripcion: tipo.descripcion,
       tipo_dedicacion: tipo.tipo_dedicacion,
-      modalidad_trabajo: tipo.modalidad_trabajo,
     });
   };
 
@@ -137,7 +133,6 @@ function AdminTiposActividad() {
     cells: [
       tipo.nombre,
       tipo.tipo_dedicacion,
-      tipo.modalidad_trabajo,
       tipo.descripcion || 'Sin descripcion',
       <div className="table-actions" key={`actions-${tipo.id}`}>
         <button
@@ -191,7 +186,7 @@ function AdminTiposActividad() {
           type="button"
           onClick={() => {
             setShowForm(true);
-            reset({ nombre: '', descripcion: '', tipo_dedicacion: '', modalidad_trabajo: '' });
+            reset({ nombre: '', descripcion: '', tipo_dedicacion: '' });
             setEditing(null);
           }}
         >
@@ -228,18 +223,6 @@ function AdminTiposActividad() {
             </div>
             <div>
               <input
-                className={`input ${errors.modalidad_trabajo ? 'input-error' : ''}`}
-                type="text"
-                placeholder="Modalidad de trabajo"
-                aria-invalid={errors.modalidad_trabajo ? 'true' : 'false'}
-                {...register('modalidad_trabajo')}
-              />
-              {errors.modalidad_trabajo && (
-                <span className="error-text" role="alert">{errors.modalidad_trabajo.message}</span>
-              )}
-            </div>
-            <div>
-              <input
                 className={`input ${errors.descripcion ? 'input-error' : ''}`}
                 type="text"
                 placeholder="Descripción"
@@ -264,7 +247,7 @@ function AdminTiposActividad() {
 
       <SectionCard title="Listado de tipos de actividad">
         <BasicTable
-          columns={['Nombre', 'Dedicacion', 'Modalidad', 'Descripcion', 'Acciones']}
+          columns={['Nombre', 'Dedicacion', 'Descripcion', 'Acciones']}
           rows={rows}
           pageSize={10}
         />
@@ -280,10 +263,6 @@ function AdminTiposActividad() {
             <div>
               <p className="eyebrow">Dedicacion</p>
               <div>{selected.tipo_dedicacion || 'Sin definir'}</div>
-            </div>
-            <div>
-              <p className="eyebrow">Modalidad</p>
-              <div>{selected.modalidad_trabajo || 'Sin definir'}</div>
             </div>
             <div>
               <p className="eyebrow">Descripcion</p>

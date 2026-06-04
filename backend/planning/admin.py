@@ -29,7 +29,7 @@ class AsignacionDocenteAdmin(admin.ModelAdmin):
     
 @admin.register(TipoActividad)
 class TipoActividadAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'tipo_dedicacion', 'modalidad_trabajo')
+    list_display = ('nombre', 'tipo_dedicacion')
     search_fields = ('nombre',)
     
 @admin.register(Actividad)

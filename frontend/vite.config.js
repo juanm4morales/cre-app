@@ -4,6 +4,13 @@ import react from '@vitejs/plugin-react'
 
 /**
  * Vite proxy rule factory with CSRF-safe origin override.
+ *
+ * When tutoring or using local dev proxy, the browser sends an
+ * Origin header (e.g. http://localhost:5173) that Django won't
+ * recognize under some strict CSRF environments. This sets the Origin
+ * header to the Vite dev server origin, which is already trusted in
+ * CSRF_TRUSTED_ORIGINS, while still letting Django validate the actual
+ * CSRF token.
  */
 function proxyTarget(target) {
   return {

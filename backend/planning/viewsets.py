@@ -1,3 +1,5 @@
+import math
+
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -9,7 +11,7 @@ from django.utils import timezone
 
 from .models import Actividad, AsignacionDocente, Programa, TipoActividad, Unidad
 from .models import ClaseCalendario, DiaClasePrograma
-from academics.models import EspacioCurricular, PlanEstudio, PlanEstudioEC
+from academics.models import ConfiguracionCRE, EspacioCurricular, PlanEstudio, PlanEstudioEC
 from accounts.permissions import IsAdminProfile, is_admin_user
 from .serializers import (
     AsignacionDocenteSerializer,
@@ -128,6 +130,16 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
         return parsed
 
     @staticmethod
+    def _calculate_creditos_from_hours(horas_ip, horas_ta):
+        total_horas = horas_ip + horas_ta
+        if total_horas <= 0:
+            raise ValidationError(
+                {"horas_ta": "La suma de Horas IP y Horas TA debe ser mayor a 0 para calcular créditos."}
+            )
+        horas_por_cre = ConfiguracionCRE.get_hours_per_cre()
+        return max(1, math.ceil(total_horas / horas_por_cre))
+
+    @staticmethod
     def _ensure_docente_self_service_user(request):
         profile = getattr(request.user, "profile", None)
         if not profile or profile.role != "DOCENTE":
@@ -161,9 +173,9 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
             raise ValidationError({"periodo": "Período inválido."})
 
         anio_cursada = self._parse_positive_int(request.data.get("anio_cursada", 1), "anio_cursada")
-        creditos = self._parse_positive_int(request.data.get("creditos"), "creditos")
         horas_ip = self._parse_positive_int(request.data.get("horas_ip", 0), "horas_ip", allow_zero=True)
         horas_ta = self._parse_positive_int(request.data.get("horas_ta", 0), "horas_ta", allow_zero=True)
+        creditos = self._calculate_creditos_from_hours(horas_ip, horas_ta)
 
         try:
             plan_estudio = PlanEstudio.objects.get(pk=plan_estudio_id)
@@ -184,6 +196,21 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
                     "horas_ta": horas_ta,
                 },
             )
+            if not espacio_created:
+                espacio.nombre = nombre
+                espacio.tipo_espacio = tipo_espacio
+                espacio.anio_cursada = anio_cursada
+                espacio.periodo = periodo
+                espacio.creditos = creditos
+                espacio.horas_ip = horas_ip
+                espacio.horas_ta = horas_ta
+                try:
+                    espacio.full_clean()
+                except DjangoValidationError as exc:
+                    raise ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
+                espacio.save(
+                    update_fields=["nombre", "tipo_espacio", "anio_cursada", "periodo", "creditos", "horas_ip", "horas_ta"]
+                )
             plan_ec, plan_ec_created = PlanEstudioEC.objects.get_or_create(
                 plan_estudio=plan_estudio,
                 espacio_curricular=espacio,
@@ -215,8 +242,8 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["patch"], url_path="temporal/carga-horaria")
     def update_temporal_carga_horaria(self, request):
         """
-        TEMPORAL para pruebas docentes: permite ajustar créditos y horas IP/TA
-        del espacio asignado para poder diseñar planificaciones y medir desvíos.
+        TEMPORAL para pruebas docentes: permite ajustar horas IP/TA del espacio
+        asignado y recalcula créditos con la equivalencia horas/CRE configurada.
 
         Debe retirarse cuando estos valores provengan del sistema académico oficial.
         """
@@ -238,9 +265,9 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        espacio.creditos = self._parse_positive_int(request.data.get("creditos"), "creditos")
         espacio.horas_ip = self._parse_positive_int(request.data.get("horas_ip", 0), "horas_ip", allow_zero=True)
         espacio.horas_ta = self._parse_positive_int(request.data.get("horas_ta", 0), "horas_ta", allow_zero=True)
+        espacio.creditos = self._calculate_creditos_from_hours(espacio.horas_ip, espacio.horas_ta)
         try:
             espacio.full_clean()
         except DjangoValidationError as exc:
@@ -248,6 +275,58 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
         espacio.save(update_fields=["creditos", "horas_ip", "horas_ta"])
 
         return Response({"espacio": EspacioCurricularSerializer(espacio).data, "temporary": True})
+
+    @action(detail=False, methods=["post"], url_path="temporal/asignarme")
+    def assign_existing_temporal_espacio(self, request):
+        """
+        TEMPORAL para pruebas docentes: permite autoasignarse un espacio
+        curricular existente y vincularlo al plan seleccionado si hace falta.
+
+        Debe retirarse cuando la asignación institucional definitiva esté integrada.
+        """
+        self._ensure_docente_self_service_user(request)
+
+        espacio_id = request.data.get("espacio_curricular")
+        plan_estudio_id = request.data.get("plan_estudio")
+
+        try:
+            espacio = EspacioCurricular.objects.get(pk=espacio_id)
+        except EspacioCurricular.DoesNotExist:
+            raise ValidationError({"espacio_curricular": "Seleccioná un espacio curricular válido."})
+
+        try:
+            plan_estudio = PlanEstudio.objects.get(pk=plan_estudio_id)
+        except PlanEstudio.DoesNotExist:
+            raise ValidationError({"plan_estudio": "Seleccioná un plan de estudio válido."})
+
+        today = timezone.now().date()
+        with transaction.atomic():
+            plan_ec, plan_ec_created = PlanEstudioEC.objects.get_or_create(
+                plan_estudio=plan_estudio,
+                espacio_curricular=espacio,
+            )
+            assignment_exists = AsignacionDocente.objects.activas(fecha=today).filter(
+                docente=request.user,
+                espacio_curricular=espacio,
+            ).exists()
+            if not assignment_exists:
+                AsignacionDocente.objects.create(
+                    docente=request.user,
+                    espacio_curricular=espacio,
+                    categoria=AsignacionDocente.Categoria.TITULAR,
+                    vigente_desde=today,
+                )
+
+        return Response(
+            {
+                "espacio": EspacioCurricularSerializer(espacio).data,
+                "plan_estudio_ec_id": plan_ec.id,
+                "plan_estudio_ec_created": plan_ec_created,
+                "assignment_created": not assignment_exists,
+                "temporary": True,
+            },
+            status=status.HTTP_201_CREATED if not assignment_exists else status.HTTP_200_OK,
+        )
 
     @action(detail=False, methods=["post"])
     def create_programa_if_needed(self, request):

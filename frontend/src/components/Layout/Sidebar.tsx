@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   FolderKanban,
+  FlaskConical,
   Gauge,
   House,
   Layers,
@@ -37,6 +38,16 @@ const navConfig: Record<'docente' | 'admin', NavGroup[]> = {
     {
       title: 'Principal',
       links: [{ to: '/docente/resumen', label: 'Inicio', icon: House }],
+    },
+    {
+      title: 'Prueba docente',
+      links: [
+        {
+          to: '/docente/espacios',
+          label: 'Espacios curriculares (prueba)',
+          icon: FlaskConical,
+        },
+      ],
     },
     {
       title: 'Planificación docente',

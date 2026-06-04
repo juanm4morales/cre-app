@@ -307,7 +307,7 @@ function DocentePlanificacionIP() {
     cells: [
       actividad.descripcion,
       `${Math.round(Number(actividad.horas) * 60)} min`,
-      actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Equipo',
+      actividad.modalidad_trabajo === 'IND' ? 'Individual' : 'Grupal',
       actividad.clase_calendario
         ? clasesProgramaActual.find((clase) => clase.id === actividad.clase_calendario)?.fecha || '-'
         : '-',

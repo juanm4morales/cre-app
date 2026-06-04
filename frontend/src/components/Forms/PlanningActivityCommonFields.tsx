@@ -111,7 +111,7 @@ function PlanningActivityCommonFields({
           aria-describedby={errors?.modalidadTrabajo ? modalidadErrorId : undefined}
         >
           <option value="IND">Trabajo individual</option>
-          <option value="EQU">Trabajo en equipo</option>
+          <option value="EQU">Trabajo grupal</option>
         </select>
         {errors?.modalidadTrabajo ? <span id={modalidadErrorId} className="error-text" role="alert">{errors.modalidadTrabajo}</span> : null}
       </label>
