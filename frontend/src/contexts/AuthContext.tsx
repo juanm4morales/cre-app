@@ -145,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const switchRole = async (role: UserRole) => {
+    await api.get('/auth/csrf');
     const response = await api.post('/auth/role', { role });
     const nextUser = normalizeUser(response.data, user?.name || 'Usuario');
     flushSync(() => {
@@ -156,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      await api.get('/auth/csrf');
       await api.post('/auth/logout');
     } finally {
       setUser(null);

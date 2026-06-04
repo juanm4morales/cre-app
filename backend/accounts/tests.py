@@ -257,6 +257,8 @@ class MeEndpointTest(TestCase):
         self.assertEqual(data["username"], "metest")
         self.assertEqual(data["name"], "Me Test")
         self.assertIn("role", data)
+        self.assertIn("csrfToken", data)
+        self.assertTrue(data["csrfToken"])
         self.assertEqual(data["available_roles"], ["docente"])
 
     def test_me_role_is_docente_by_default(self):
@@ -295,6 +297,8 @@ class MeEndpointTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = response.json()
         self.assertEqual(data["role"], "docente")
+        self.assertIn("csrfToken", data)
+        self.assertTrue(data["csrfToken"])
         self.assertEqual(data["available_roles"], ["admin", "docente"])
 
     def test_login_rejects_unavailable_role(self):
@@ -310,7 +314,7 @@ class MeEndpointTest(TestCase):
         self.user.profile.save(update_fields=["role"])
         self._login(role="docente")
 
-        token = self.client.get("/api/auth/csrf").cookies["csrftoken"].value
+        token = self.client.get("/api/auth/csrf").json()["csrfToken"]
         response = self.client.post(
             "/api/auth/role",
             {"role": "admin"},

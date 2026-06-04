@@ -1,4 +1,5 @@
 from django.contrib.auth import login, logout
+from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -14,6 +15,7 @@ def _auth_payload(request, user):
 		"name": user.get_full_name() or user.username,
 		"role": get_active_role(user, request.session),
 		"available_roles": get_available_roles(user),
+		"csrfToken": get_token(request),
 	}
 
 
@@ -21,7 +23,7 @@ def _auth_payload(request, user):
 @permission_classes([AllowAny])
 @ensure_csrf_cookie
 def csrf(request):
-	return Response({"detail": "CSRF cookie set"})
+	return Response({"detail": "CSRF cookie set", "csrfToken": get_token(request)})
 
 
 @api_view(["POST"])

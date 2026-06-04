@@ -23,11 +23,25 @@ const api = axios.create({
   },
 });
 
+let csrfToken: string | null = null;
+
+function storeCsrfToken(data: unknown) {
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  const payload = data as { csrfToken?: unknown; csrf_token?: unknown };
+  const nextToken = payload.csrfToken || payload.csrf_token;
+  if (typeof nextToken === 'string' && nextToken.length > 0) {
+    csrfToken = nextToken;
+  }
+}
+
 api.interceptors.request.use(
   (config) => {
-    const csrfToken = getCookie('csrftoken');
-    if (csrfToken) {
-      config.headers['X-CSRFToken'] = csrfToken;
+    const token = csrfToken || getCookie('csrftoken');
+    if (token) {
+      config.headers['X-CSRFToken'] = token;
     }
     return config;
   },
@@ -36,6 +50,8 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
+    storeCsrfToken(response.data);
+
     const method = String(response?.config?.method || '').toUpperCase();
     const url = String(response?.config?.url || '');
 

@@ -56,6 +56,32 @@ Todas las variables van en **App Service → Variables de entorno → Configurac
 | `POSTGRES_HOST` | `<servidor>.postgres.database.azure.com` |
 | `POSTGRES_PORT` | `5432` |
 
+### Variante split-origin: Azure Static Web Apps + App Service
+
+Cuando el frontend se publica en Azure Static Web Apps y consume el backend de App Service desde otro sitio, las variables de seguridad deben apuntar al origen real del frontend:
+
+```env
+DEBUG=False
+ALLOWED_HOSTS=cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net
+
+CORS_ALLOWED_ORIGINS=https://lively-river-0fedd7a0f.7.azurestaticapps.net
+CSRF_TRUSTED_ORIGINS=https://lively-river-0fedd7a0f.7.azurestaticapps.net
+CORS_ALLOW_CREDENTIALS=True
+
+CSRF_COOKIE_SECURE=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SAMESITE=None
+SESSION_COOKIE_SAMESITE=None
+SECURE_SSL_REDIRECT=True
+```
+
+Notas:
+
+- `SameSite=None` requiere cookies `Secure`; usarlo solo sobre HTTPS.
+- No configurar CORS con wildcard (`*`) cuando se envían credenciales.
+- El frontend debe compilarse con `VITE_API_URL` apuntando al App Service en despliegues split-origin.
+- `/api/auth/csrf`, `/api/auth/login`, `/api/auth/me` y `/api/auth/role` devuelven `csrfToken` para que la SPA pueda enviar `X-CSRFToken` aunque no pueda leer cookies del dominio del backend.
+
 ---
 
 ## GitHub Actions Secrets

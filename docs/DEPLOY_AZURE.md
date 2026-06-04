@@ -74,6 +74,29 @@ POSTGRES_PORT=5432
 
 > **Nota**: `POSTGRES_HOST` debe ser el FQDN del servidor PostgreSQL Flexible, no `localhost`.
 
+### Seguridad CSRF/CORS en despliegue split-origin
+
+Si el frontend se sirve desde Azure Static Web Apps (`*.azurestaticapps.net`) y el backend desde App Service (`*.azurewebsites.net`), el navegador trata las requests como cross-site. En esa variante:
+
+```env
+CORS_ALLOWED_ORIGINS=https://lively-river-0fedd7a0f.7.azurestaticapps.net
+CSRF_TRUSTED_ORIGINS=https://lively-river-0fedd7a0f.7.azurestaticapps.net
+CORS_ALLOW_CREDENTIALS=True
+CSRF_COOKIE_SECURE=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SAMESITE=None
+SESSION_COOKIE_SAMESITE=None
+```
+
+Motivo:
+
+- DRF `SessionAuthentication` exige CSRF en requests autenticadas inseguras (`POST`, `PUT`, `PATCH`, `DELETE`).
+- La SPA en `azurestaticapps.net` no puede leer `document.cookie` del dominio `azurewebsites.net`.
+- El backend expone `csrfToken` en `/api/auth/csrf` y en los payloads de autenticación para que el frontend autorizado lo envíe como `X-CSRFToken`.
+- Las cookies de sesión/CSRF deben viajar en XHR cross-site, por eso `SameSite=None` + `Secure` es necesario.
+
+No usar `CORS_ALLOW_ALL_ORIGINS` ni wildcards de CORS con credenciales. Agregar solo orígenes exactos y confiables.
+
 ---
 
 ## Comando de inicio (Startup Command)
@@ -189,6 +212,13 @@ python backend/manage.py createsuperuser --noinput
 1. Verificar que `npm run build` terminó bien
 2. Verificar que `collectstatic` corrió y populó `backend/staticfiles/`
 3. Verificar que `frontend/vite.config.js` tiene `base: '/static/'`
+
+### 403 al cambiar de modo docente/admin
+1. Confirmar que `GET /api/auth/csrf` devuelve JSON con `csrfToken`.
+2. Confirmar en DevTools que el `POST /api/auth/role` envía `X-CSRFToken`.
+3. Confirmar que el `POST` incluye cookies `sessionid` y `csrftoken`.
+4. Confirmar `CORS_ALLOWED_ORIGINS` y `CSRF_TRUSTED_ORIGINS` con el origen exacto del frontend.
+5. En split-origin, confirmar `CSRF_COOKIE_SAMESITE=None`, `SESSION_COOKIE_SAMESITE=None`, `CSRF_COOKIE_SECURE=True` y `SESSION_COOKIE_SECURE=True`.
 
 ---
 

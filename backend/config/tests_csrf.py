@@ -36,12 +36,14 @@ class CSRFIntegrationTest(TestCase):
         self.client = Client(enforce_csrf_checks=True)
 
     def test_1_csrf_endpoint_sets_cookie(self):
-        """GET /api/auth/csrf must set the csrftoken cookie"""
+        """GET /api/auth/csrf must set the cookie and return a readable token."""
         response = self.client.get("/api/auth/csrf")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("csrftoken", response.cookies)
         token = response.cookies["csrftoken"].value
         self.assertTrue(len(token) > 0, "CSRF token should not be empty")
+        self.assertIn("csrfToken", response.json())
+        self.assertTrue(len(response.json()["csrfToken"]) > 0, "CSRF response token should not be empty")
 
     def test_2_login_works_without_csrf_when_unauthenticated(self):
         """POST /api/auth/login can succeed without CSRF when unauthenticated

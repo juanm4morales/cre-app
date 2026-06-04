@@ -15,26 +15,74 @@ Desarrollo: http://localhost:8000/api/
 
 ## Autenticación
 
-La API usa **autenticación por sesión** (Django session cookies). El frontend React envía Cokiees automáticamente en cada request al mismo dominio.
+La API usa **autenticación por sesión** (Django session cookies) con protección CSRF de Django/DRF para todos los métodos inseguros autenticados (`POST`, `PUT`, `PATCH`, `DELETE`).
+
+En despliegues **same-origin**, el frontend puede leer la cookie `csrftoken` y enviarla como header `X-CSRFToken`. En despliegues **split-origin** (por ejemplo Azure Static Web Apps en `azurestaticapps.net` consumiendo App Service en `azurewebsites.net`), el JavaScript no puede leer cookies del dominio del backend. Por eso los endpoints de autenticación devuelven también un campo JSON `csrfToken` legible por el frontend autorizado.
+
+El token CSRF **no autentica por sí solo**: las requests mutantes siguen requiriendo cookie de sesión válida, cookie/secret CSRF compatible, origen confiable, CORS con credenciales y permisos DRF.
 
 ### Endpoints de autenticación
 
 | Método | Path | Descripción |
 |--------|------|-------------|
-| `GET` | `/api/auth/csrf/` | Obtener cookie CSRF |
-| `GET` | `/api/auth/me/` | Datos del usuario autenticado |
-| `POST` | `/api/auth/login/` | Login (session cookie) |
-| `POST` | `/api/auth/logout/` | Logout |
+| `GET` | `/api/auth/csrf` | Obtener/rotar cookie CSRF y `csrfToken` JSON |
+| `GET` | `/api/auth/me` | Datos del usuario autenticado, rol activo, roles disponibles y `csrfToken` |
+| `POST` | `/api/auth/login` | Login (session cookie), selección opcional de rol y `csrfToken` actualizado |
+| `POST` | `/api/auth/role` | Cambiar rol activo (`docente`/`admin`) para usuarios con ambos roles disponibles |
+| `POST` | `/api/auth/logout` | Logout |
+
+### Respuesta CSRF
+
+```json
+{
+  "detail": "CSRF cookie set",
+  "csrfToken": "<token-csrf-enmascarado>"
+}
+```
+
+### Payload de usuario autenticado
+
+```json
+{
+  "username": "usuario",
+  "name": "Nombre Apellido",
+  "role": "docente",
+  "available_roles": ["admin", "docente"],
+  "csrfToken": "<token-csrf-enmascarado>"
+}
+```
 
 ### Usar con fetch
 
 ```js
-// Con credentials: 'include', las cookies se envían automáticamente
-const res = await fetch('/api/auth/me/', {
+// En same-origin se puede obtener el token desde la cookie.
+// En split-origin usar el csrfToken devuelto por /api/auth/csrf o /api/auth/login.
+const csrfResponse = await fetch('/api/auth/csrf', {
   credentials: 'include',
-  headers: { 'X-CSRFToken': getCookie('csrftoken') }
+})
+const { csrfToken } = await csrfResponse.json()
+
+const res = await fetch('/api/auth/role', {
+  method: 'POST',
+  credentials: 'include',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-CSRFToken': csrfToken,
+  },
+  body: JSON.stringify({ role: 'admin' }),
 })
 ```
+
+### Requisitos de seguridad para split-origin
+
+Para que el flujo funcione de forma segura en producción cross-site:
+
+- `CORS_ALLOWED_ORIGINS` debe contener solo el origen exacto del frontend.
+- `CSRF_TRUSTED_ORIGINS` debe contener el origen exacto del frontend para requests inseguras.
+- `CORS_ALLOW_CREDENTIALS=True` debe estar activo.
+- `SESSION_COOKIE_SECURE=True` y `CSRF_COOKIE_SECURE=True` son obligatorios bajo HTTPS.
+- `SESSION_COOKIE_SAMESITE=None` y `CSRF_COOKIE_SAMESITE=None` son necesarios cuando frontend y backend están en sitios distintos.
+- Nunca usar wildcard de CORS con credenciales ni eximir de CSRF endpoints autenticados mutantes.
 
 ---
 
