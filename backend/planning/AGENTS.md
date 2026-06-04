@@ -5,3 +5,4 @@
 - `EspaciosCurricularesAsignadosViewSet` is also the docente self-service surface for temporary flows (`temporal/espacio`, `temporal/carga-horaria`, `temporal/asignarme`); keep its role guard and `AsignacionDocente.objects.activas()` checks aligned.
 - Temporary space create/update flows derive `EspacioCurricular.creditos` from `horas_ip + horas_ta` using `ConfiguracionCRE.get_hours_per_cre()`; do not accept or trust client-supplied credits in these endpoints.
 - Partial saves on `EspacioCurricular` need explicit `full_clean()` in the viewset; validators do not run automatically on `save(update_fields=...)`.
+- `import_tipo_actividad_xlsx` is the intended seed path for `TipoActividad`; it reads the first sheet starting at row 3 and folds descripción/ejemplos/notas into one `descripcion`, so workbook layout changes can alter imported text without changing model code.
