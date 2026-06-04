@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 const mockPrograma = { id: 1, plan_estudio_ec: 1, anio_academico: 2026, descripcion: 'Programa 2026' };
 const mockTipoTA = { id: 20, nombre: 'Trabajo práctico', tipo_dedicacion: 'TA' as const };
 const mockUnidad = { id: 1, programa: 1, numero: 1, descripcion: 'Unidad 1' };
+const mockEspacio = { id: 10, codigo: 'TA-10', nombre: 'Espacio TA', creditos: 6, horas_ip: 45, horas_ta: 1.5 };
 
 let queryClient: QueryClient;
 
@@ -41,13 +42,13 @@ function renderComponent() {
   );
 }
 
-function setupMocks() {
+function setupMocks(espacios: Array<typeof mockEspacio> = []) {
   vi.mocked(api.get)
     .mockResolvedValueOnce({ data: { results: [mockPrograma] } })
     .mockResolvedValueOnce({ data: { results: [mockTipoTA] } })
     .mockResolvedValueOnce({ data: { results: [mockUnidad] } })
     .mockResolvedValueOnce({ data: { results: [] } })
-    .mockResolvedValueOnce({ data: { results: [] } });
+    .mockResolvedValueOnce({ data: { results: espacios } });
 }
 
 beforeEach(() => {
@@ -123,6 +124,28 @@ describe('DocentePlanificacionTA', () => {
     const submitBtn = screen.getByRole('button', { name: /crear actividad ta/i });
     expect(submitBtn).toBeEnabled();
     expect(submitBtn).not.toBeDisabled();
+  });
+
+  it('shows remaining TA time in hours from 60 minutes', async () => {
+    sessionStorage.setItem('selected_plan_estudio_ec_id', '1');
+    sessionStorage.setItem('selected_espacio_curricular_id', String(mockEspacio.id));
+
+    setupMocks([mockEspacio]);
+
+    renderComponent();
+
+    expect(await screen.findByText(/quedan 1\.5 hs disponibles para actividades ta\./i)).toBeInTheDocument();
+  });
+
+  it('shows remaining TA time in minutes below 60 minutes', async () => {
+    sessionStorage.setItem('selected_plan_estudio_ec_id', '1');
+    sessionStorage.setItem('selected_espacio_curricular_id', String(mockEspacio.id));
+
+    setupMocks([{ ...mockEspacio, horas_ta: 0.75 }]);
+
+    renderComponent();
+
+    expect(await screen.findByText(/quedan 45 min disponibles para actividades ta\./i)).toBeInTheDocument();
   });
   });
 
