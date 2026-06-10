@@ -1,9 +1,11 @@
-name: Azure Static Web Apps CI/CD
+name: Azure Static Web Apps CI/CD (preview, disabled)
 
 on:
-  push:
-    branches:
-      - azure
+  # Desactivado: SWA ya no es la URL oficial de producción.
+  # El deploy principal es same-origin via App Service.
+  # push:
+  #   branches:
+  #     - azure
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:

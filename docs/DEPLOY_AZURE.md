@@ -4,11 +4,11 @@ Guía de despliegue de CREApp en **Azure App Service** (Python 3.13 + Django 6.0
 
 ---
 
-## Arquitectura actual
+## Arquitectura (same-origin)
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Azure App Service (Linux, plan F1 o B1)   │
+│  Azure App Service (Linux, plan B1)         │
 │                                             │
 │  Django (Gunicorn)                          │
 │  ├── /              → React SPA            │
@@ -18,9 +18,14 @@ Guía de despliegue de CREApp en **Azure App Service** (Python 3.13 + Django 6.0
 │  └── /static/       → Static assets        │
 │                                             │
 │  WhiteNoise sirve React dist/               │
-│  PostgreSQL Flexible Server (separate)      │
+│                                             │
+│  PostgreSQL Flexible Server                 │
+│  Acceso público restringido a outbound IPs  │
+│  del App Service (SSL obligatorio)          │
 └─────────────────────────────────────────────┘
 ```
+
+Tanto el frontend React como el backend Django se sirven desde el mismo origen (`*.azurewebsites.net`). Esto elimina problemas de cookies cross-site y simplifica CORS/CSRF.
 
 ---
 
@@ -56,12 +61,14 @@ SECRET_KEY=<generar con: python -c "import secrets; print(secrets.token_urlsafe(
 ALLOWED_HOSTS=cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net
 CSRF_TRUSTED_ORIGINS=https://cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net
 
-# CORS (same-origin, no necesario pero dejarlo)
+# CORS
 CORS_ALLOWED_ORIGINS=https://cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net
 
-# Cookies seguros
+# Cookies (same-origin)
 CSRF_COOKIE_SECURE=True
 SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SAMESITE=Lax
+SESSION_COOKIE_SAMESITE=Lax
 SECURE_SSL_REDIRECT=True
 
 # Base de datos
@@ -74,9 +81,9 @@ POSTGRES_PORT=5432
 
 > **Nota**: `POSTGRES_HOST` debe ser el FQDN del servidor PostgreSQL Flexible, no `localhost`.
 
-### Seguridad CSRF/CORS en despliegue split-origin
+### Seguridad CSRF/CORS en despliegue split-origin (legacy)
 
-Si el frontend se sirve desde Azure Static Web Apps (`*.azurestaticapps.net`) y el backend desde App Service (`*.azurewebsites.net`), el navegador trata las requests como cross-site. En esa variante:
+Cuando el frontend se sirve desde Azure Static Web Apps (`*.azurestaticapps.net`) y el backend desde App Service (`*.azurewebsites.net`) en dominios distintos, el navegador trata las requests como cross-site. Esta variante ya no se usa en producción pero se documenta como referencia:
 
 ```env
 CORS_ALLOWED_ORIGINS=https://lively-river-0fedd7a0f.7.azurestaticapps.net
@@ -113,11 +120,23 @@ gunicorn --bind=0.0.0.0:8000 --timeout 600 --chdir backend config.wsgi:applicati
 
 ## Firewall PostgreSQL
 
-En **PostgreSQL Flexible Server → Seguridad → Redes**:
+PostgreSQL Flexible Server usa acceso público restringido a las IPs salientes del App Service. Esto evita el costo de Private Endpoint sin exponer la DB a Internet.
 
-- Permitir acceso público o privado según necesidad
-- **Permitir servicios de Azure**: Activado
-- Agregar IP del cliente si accéder desde pgAdmin local
+En **PostgreSQL Flexible Server → Networking**:
+
+- Habilitar **Public access**
+- **Desmarcar** `Allow public access from any Azure service within Azure to this server`
+- Agregar reglas firewall con las outbound IPs del App Service:
+
+```text
+cre-app-api-outbound-block  68.211.56.0  -  68.211.56.255
+cre-app-api-outbound-extra  68.211.9.0   -  68.211.9.0
+```
+
+Para obtener las outbound IPs: App Service `cre-app-api` → Properties → `Outbound IP addresses` y `Additional Outbound IP addresses`.
+
+- Verificar que `sslmode=require` esté en la connection string
+- Si se cambia el tier del App Service Plan, revisar firewall nuevamente
 
 ---
 
