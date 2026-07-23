@@ -49,6 +49,8 @@ Todas las variables van en **App Service → Variables de entorno → Configurac
 | `CORS_ALLOWED_ORIGINS` | `https://cre-app-api-evhxegffcahfftbh.chilecentral-01.azurewebsites.net` |
 | `CSRF_COOKIE_SECURE` | `True` |
 | `SESSION_COOKIE_SECURE` | `True` |
+| `CSRF_COOKIE_SAMESITE` | `Lax` |
+| `SESSION_COOKIE_SAMESITE` | `Lax` |
 | `SECURE_SSL_REDIRECT` | `True` |
 | `POSTGRES_DB` | `creappdb` |
 | `POSTGRES_USER` | `<admin>` |
@@ -56,9 +58,9 @@ Todas las variables van en **App Service → Variables de entorno → Configurac
 | `POSTGRES_HOST` | `<servidor>.postgres.database.azure.com` |
 | `POSTGRES_PORT` | `5432` |
 
-### Variante split-origin: Azure Static Web Apps + App Service
+### Variante split-origin: Azure Static Web Apps + App Service (legacy)
 
-Cuando el frontend se publica en Azure Static Web Apps y consume el backend de App Service desde otro sitio, las variables de seguridad deben apuntar al origen real del frontend:
+Cuando el frontend se publica en Azure Static Web Apps y consume el backend de App Service desde otro sitio, las variables de seguridad deben apuntar al origen real del frontend. Esta variante ya no se usa en producción pero se documenta como referencia:
 
 ```env
 DEBUG=False
