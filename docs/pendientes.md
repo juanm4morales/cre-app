@@ -62,7 +62,16 @@
 - `.gitignore` actualizado (node_modules, .tmp, .venv, .opencode, etc.)
 - Logo UNCuyo local (reemplazadas URLs remotas de iconape.com en Sidebar y LoginPage)
 - Corrección de ~50 tildes/ortografía en 15 archivos (Gestión, Planificación, Seleccioná, días, Sábado, Miércoles, aún, etc.)
-- Estados loading/error añadidos a 5 admin pages (Actividades, Carreras, Programas, UnidadesAcademicas, EspaciosCurriculares)
+### Fase 6 — Rediseño UI/UX, Accesibilidad y Modo Oscuro
+- Rediseño del sistema de tokens de color en `index.css` con la paleta institucional UNCUYO Blue y cumplimiento WCAG 2.1 AA/AAA.
+- Anillo de enfoque `:focus-visible` accesible (`--focus-ring-color: #60a5fa` en modo oscuro, contraste > 7.4:1).
+- Definición de tokens `--color-primary-700` (`#bfdbfe`) y `--color-primary-800` (`#dbeafe`) en modo oscuro para evitar textos invisibles sobre paneles oscuros.
+- Navegación activa (`.nav-link-active`) en `layout.css` con alto contraste (`#2563eb` con texto blanco `#ffffff`).
+- Menú desplegable en `Topbar` con efecto *glassmorphism* (`backdrop-filter: blur(12px)`).
+- Fondo de tablas en modo oscuro (`.table th`) unificado con `--color-bg-elevated` (`#334155`).
+- Familia de componentes esqueleto `<Skeleton />` y `<TableSkeleton />` en `Skeleton.tsx` para animaciones de carga accesibles (`animate-pulse`).
+- 52/52 pruebas unitarias pasando en Vitest, compilación limpia en Vite y Typecheck en 0 errores.
+- Despliegue automático a Azure App Service (`cre-app-api`) configurado y activo en rama `azure`.
 
 ---
 
@@ -76,11 +85,9 @@
 |---|---|---|
 | Paginación server-side/filtros | Coordinar paginación con API | Datasets actuales son chicos; paginación cliente funciona |
 | Sidebar estado expansión | Simplificar con CSS-only o contexto | Funciona bien; refactor cosmético |
-| Animaciones/page transitions | Mejorar con Framer Motion | Sin impacto funcional |
 | `useApiAutoRefresh` | Eliminar hook | Aún usado en DiasCursado, Actividades, AdminUsuarios, AdminTiposActividad; limpiar cuando migren |
 | RUM con `web-vitals` | Instrumentar Core Web Vitals | Prematuro; haría falta backend |
 | Responsive tables | Convertir tablas a cards en móvil | Scroll horizontal funciona |
-| Dark mode | Tema oscuro | Overkill para MVP |
 
 ---
 
