@@ -68,7 +68,9 @@
 
 ## ⏳ Pendientes por prioridad
 
-*(No quedan items prioritarios. Los items below son diferibles para cuando el proyecto escale.)*
+| Item | Descripción | Por qué diferir |
+|---|---|---|
+| Validación de horas IP por clase | A nivel de lógica de negocio, impedir que la suma de horas IP cargadas para una clase supere la duración del horario definido en Agenda de cursado para ese día. | Debe quedar cubierto en backend/API y no depender sólo de la UI. |
 
 | Item | Descripción | Por qué diferir |
 |---|---|---|

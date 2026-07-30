@@ -4,7 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, CircleUserRound, LogOut } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import api, { APP_DATA_CHANGED_EVENT } from '../../services/api';
+import api from '../../services/api';
+import { useDocenteSelection } from '../../hooks/useDocenteSelection';
 
 interface TopbarProps {
   role: 'docente' | 'admin';
@@ -81,9 +82,7 @@ function Topbar({ role }: TopbarProps) {
   const { user, logout, switchRole } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [selectedEspacioId, setSelectedEspacioId] = useState<string>(
-    () => (role === 'docente' ? sessionStorage.getItem('selected_espacio_curricular_id') || '' : '')
-  );
+  const { selection, setSelection } = useDocenteSelection();
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -94,6 +93,7 @@ function Topbar({ role }: TopbarProps) {
   const targetRole = role === 'admin' ? 'docente' : 'admin';
   const canSwitchPortals = user?.availableRoles.includes(targetRole) ?? false;
   const portalSwitchLabel = targetRole === 'docente' ? 'Entrar como docente' : 'Entrar como admin';
+  const selectedEspacioId = role === 'docente' ? selection.espacioId : '';
 
   const shouldRefreshCurrentPath = (path: string) => {
     return DOCENTE_REFRESH_PATHS.some((refreshPath) => path.startsWith(refreshPath));
@@ -215,21 +215,16 @@ function Topbar({ role }: TopbarProps) {
       return;
     }
 
-    sessionStorage.setItem('selected_espacio_curricular_id', espacioId);
-    sessionStorage.setItem('selected_plan_estudio_ec_id', String(planEcId));
-    sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
-    setSelectedEspacioId(espacioId);
+    setSelection({
+      espacioId,
+      planEstudioEcId: String(planEcId),
+      espacioNombre: espacio.nombre,
+    });
 
     if (shouldRefreshCurrentPath(location.pathname)) {
-      window.dispatchEvent(
-        new CustomEvent(APP_DATA_CHANGED_EVENT, {
-          detail: { method: 'LOCAL', url: 'space-selection' },
-        })
-      );
-
       navigate(location.pathname, { replace: true });
     } else {
-      navigate('/docente/programas');
+      navigate('/docente/resumen');
     }
   };
 

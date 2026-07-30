@@ -12,11 +12,15 @@ import { useApiAutoRefresh } from '../../hooks/useApiAutoRefresh';
 
 const tipoActividadSchema = z.object({
   nombre: z.string().min(1, 'El nombre es requerido'),
-  tipo_dedicacion: z.string().optional(),
+  tipo_dedicacion: z.string().refine((value) => value === 'IP' || value === 'TA', {
+    message: 'Seleccioná un tipo de dedicación válido',
+  }),
   descripcion: z.string().optional(),
 });
 
 type TipoActividadFormValues = z.infer<typeof tipoActividadSchema>;
+type TipoActividadFormInput = z.input<typeof tipoActividadSchema>;
+type TipoActividadFormOutput = z.output<typeof tipoActividadSchema>;
 
 interface TipoActividad {
   id: number;
@@ -44,7 +48,7 @@ function AdminTiposActividad() {
     handleSubmit,
     formState: { errors },
     reset,
-  } = useForm<TipoActividadFormValues>({
+  } = useForm<TipoActividadFormInput, undefined, TipoActividadFormOutput>({
     resolver: zodResolver(tipoActividadSchema),
     defaultValues: {
       nombre: '',
@@ -209,18 +213,22 @@ function AdminTiposActividad() {
                 <span className="error-text" role="alert">{errors.nombre.message}</span>
               )}
             </div>
-            <div>
-              <input
-                className={`input ${errors.tipo_dedicacion ? 'input-error' : ''}`}
-                type="text"
-                placeholder="Tipo de dedicación"
+            <label className="grid-label" htmlFor="tipo-dedicacion">
+              <span className="muted">Tipo de dedicación</span>
+              <select
+                id="tipo-dedicacion"
+                className={`select ${errors.tipo_dedicacion ? 'input-error' : ''}`}
                 aria-invalid={errors.tipo_dedicacion ? 'true' : 'false'}
                 {...register('tipo_dedicacion')}
-              />
+              >
+                <option value="">Seleccioná un tipo de dedicación</option>
+                <option value="IP">IP</option>
+                <option value="TA">TA</option>
+              </select>
               {errors.tipo_dedicacion && (
                 <span className="error-text" role="alert">{errors.tipo_dedicacion.message}</span>
               )}
-            </div>
+            </label>
             <div>
               <input
                 className={`input ${errors.descripcion ? 'input-error' : ''}`}

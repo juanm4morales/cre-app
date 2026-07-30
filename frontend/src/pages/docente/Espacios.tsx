@@ -7,6 +7,7 @@ import SectionCard from '../../components/Common/SectionCard';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
+import { setDocenteSelection } from '../../hooks/useDocenteSelection';
 
 interface EspacioCurricular {
   id: number;
@@ -144,9 +145,11 @@ export default function DocenteEspacios() {
       const { espacio, plan_estudio_ec_id: planEcId } = response.data;
       queryClient.invalidateQueries({ queryKey: ['espacios-asignados'] });
       queryClient.invalidateQueries({ queryKey: ['planes-estudio-ec'] });
-      sessionStorage.setItem('selected_espacio_curricular_id', String(espacio.id));
-      sessionStorage.setItem('selected_plan_estudio_ec_id', String(planEcId));
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: String(espacio.id),
+        planEstudioEcId: String(planEcId),
+        espacioNombre: espacio.nombre,
+      });
       setTemporaryForm((current) => ({ ...defaultTemporaryForm, plan_estudio: current.plan_estudio }));
       toast.success('Espacio temporal cargado y asignado. Ya podés crear el programa y planificar.');
     },
@@ -178,9 +181,11 @@ export default function DocenteEspacios() {
       const { espacio, plan_estudio_ec_id: planEcId } = response.data;
       queryClient.invalidateQueries({ queryKey: ['espacios-asignados'] });
       queryClient.invalidateQueries({ queryKey: ['planes-estudio-ec'] });
-      sessionStorage.setItem('selected_espacio_curricular_id', String(espacio.id));
-      sessionStorage.setItem('selected_plan_estudio_ec_id', String(planEcId));
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: String(espacio.id),
+        planEstudioEcId: String(planEcId),
+        espacioNombre: espacio.nombre,
+      });
       setExistingAssignmentForm((current) => ({ ...defaultExistingAssignmentForm, plan_estudio: current.plan_estudio }));
       toast.success('Espacio existente asignado. Ya podés crear el programa y planificar.');
     },
@@ -212,11 +217,13 @@ export default function DocenteEspacios() {
   const handleSelectEspacio = (espacio: EspacioCurricular) => {
     const planEcId = planEcsMap.get(espacio.id);
     if (planEcId) {
-      sessionStorage.setItem('selected_espacio_curricular_id', espacio.id.toString());
-      sessionStorage.setItem('selected_plan_estudio_ec_id', planEcId.toString());
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: espacio.id.toString(),
+        planEstudioEcId: planEcId.toString(),
+        espacioNombre: espacio.nombre,
+      });
 
-      navigate('/docente/programas');
+      navigate('/docente/resumen');
       return;
     }
 

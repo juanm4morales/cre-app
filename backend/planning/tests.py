@@ -1,8 +1,10 @@
-from datetime import date
+from datetime import date, time
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from django.apps import apps
 from django.core.management import call_command
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
@@ -280,7 +282,12 @@ class PlanningRulesTestCase(TestCase):
             tipo_dedicacion=TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO,
         )
 
-        self.dia_lunes = DiaClasePrograma.objects.create(programa=self.programa, dia_semana=0)
+        self.dia_lunes = DiaClasePrograma.objects.create(
+            programa=self.programa,
+            dia_semana=0,
+            hora_inicio=time(8, 0),
+            hora_fin=time(10, 0),
+        )
         self.clase_lunes = ClaseCalendario.objects.create(
             programa=self.programa,
             dia_clase=self.dia_lunes,
@@ -337,6 +344,37 @@ class PlanningRulesTestCase(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("clase_calendario", serializer.errors)
+
+    def test_serializer_rejects_ip_hours_over_class_duration(self):
+        serializer = ActividadCreateSerializer(
+            data={
+                "programa": self.programa.id,
+                "tipo_actividad": self.tipo_ip.id,
+                "descripcion": "Actividad IP extensa",
+                "horas": "3.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [self.unidad_prog.id],
+                "clase_calendario": self.clase_lunes.id,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("horas", serializer.errors)
+
+    def test_serializer_allows_ip_hours_within_class_duration(self):
+        serializer = ActividadCreateSerializer(
+            data={
+                "programa": self.programa.id,
+                "tipo_actividad": self.tipo_ip.id,
+                "descripcion": "Actividad IP válida",
+                "horas": "2.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [self.unidad_prog.id],
+                "clase_calendario": self.clase_lunes.id,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_serializer_rejects_class_for_ta(self):
         serializer = ActividadCreateSerializer(
@@ -534,6 +572,24 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
             )
 
         self.assertEqual(TipoActividad.objects.count(), 0)
+
+    def test_seed_ip_tipo_actividad_migration_is_idempotent(self):
+        migration = import_module("planning.migrations.0011_seed_ip_tipo_actividad")
+
+        migration.seed_ip_tipo_actividad(apps, None)
+        migration.seed_ip_tipo_actividad(apps, None)
+
+        self.assertEqual(
+            TipoActividad.objects.filter(
+                nombre__in=migration.IP_TIPO_ACTIVIDAD_NAMES,
+                tipo_dedicacion=TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA,
+            ).count(),
+            len(migration.IP_TIPO_ACTIVIDAD_NAMES),
+        )
+        self.assertEqual(
+            TipoActividad.objects.filter(nombre="Clase expositiva").count(),
+            1,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════
