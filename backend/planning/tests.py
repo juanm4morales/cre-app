@@ -723,6 +723,81 @@ class PlanningFullFlowIntegrationTest(TestCase):
 
     # ── Tests ──
 
+    def test_programa_api_text_sections_create_read_update_and_defaults(self):
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+        sections = {
+            "fundamentacion": "Fundamentación inicial",
+            "objetivos_generales": "Objetivos generales iniciales",
+            "objetivos_especificos": "Objetivos específicos iniciales",
+            "competencias": "Competencias iniciales",
+        }
+
+        # Omitted optional sections default to empty strings.
+        response = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.plan_ec.id,
+                "anio_academico": self.current_year,
+                "descripcion": "Programa con valores por defecto",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        default_programa_id = response.json()["id"]
+        for field in sections:
+            self.assertEqual(response.json()[field], "")
+
+        # Create with all sections, then verify both detail and list reads.
+        response = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.plan_ec.id,
+                "anio_academico": self.current_year + 1,
+                "descripcion": "Programa completo",
+                **sections,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=self._csrf(),
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        programa_id = response.json()["id"]
+        self.assertEqual({field: response.json()[field] for field in sections}, sections)
+
+        response = self.client.get(f"/api/programas/{programa_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({field: response.json()[field] for field in sections}, sections)
+
+        response = self.client.get("/api/programas")
+        self.assertEqual(response.status_code, 200)
+        programa = next(item for item in response.json()["results"] if item["id"] == programa_id)
+        self.assertEqual({field: programa[field] for field in sections}, sections)
+
+        updated_sections = {**sections, "fundamentacion": "Fundamentación actualizada"}
+        response = self.client.patch(
+            f"/api/programas/{programa_id}",
+            {"fundamentacion": updated_sections["fundamentacion"]},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=self._csrf(),
+        )
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(
+            {field: response.json()[field] for field in sections},
+            updated_sections,
+        )
+
+        default_programa = Programa.objects.get(pk=default_programa_id)
+        self.assertEqual(
+            [
+                default_programa.fundamentacion,
+                default_programa.objetivos_generales,
+                default_programa.objetivos_especificos,
+                default_programa.competencias,
+            ],
+            ["", "", "", ""],
+        )
+
     # ──────── 1. Docente full CRUD flow ────────
 
     def test_01_docente_full_flow_create_program_unidades_actividades(self):

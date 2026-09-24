@@ -191,7 +191,16 @@ class AsignacionDocenteSerializer(serializers.ModelSerializer):
 class ProgramaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["id", "plan_estudio_ec", "anio_academico", "descripcion"]
+        fields = [
+            "id",
+            "plan_estudio_ec",
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
 
 class UnidadSerializer(serializers.ModelSerializer):
@@ -247,7 +256,16 @@ class UnidadUpdateSerializer(serializers.ModelSerializer):
 class ProgramaCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["id", "plan_estudio_ec", "anio_academico", "descripcion"]
+        fields = [
+            "id",
+            "plan_estudio_ec",
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
     def validate_plan_estudio_ec(self, value: PlanEstudioEC):
         request = self.context.get("request")
@@ -259,7 +277,14 @@ class ProgramaCreateSerializer(serializers.ModelSerializer):
 class ProgramaUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["anio_academico", "descripcion"]
+        fields = [
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
 
 class ActividadSerializer(serializers.ModelSerializer):
