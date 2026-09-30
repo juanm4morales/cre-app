@@ -101,6 +101,81 @@ describe('DocenteProgramas', () => {
     expect(await screen.findByText(/crear nuevo programa/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /crear programa/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cancelar/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Fundamentación' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Objetivos generales' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Objetivos específicos' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Competencias' })).toBeInTheDocument();
+  });
+
+  it('includes all long text fields in the create POST payload', async () => {
+    sessionStorage.setItem('selected_plan_estudio_ec_id', '1');
+    vi.mocked(api.get).mockImplementation((url) => Promise.resolve(
+      url === '/planes-estudio-ec'
+        ? { data: { results: [{ id: 1, plan_estudio: 1, espacio_curricular: 1 }] } }
+        : mockResponse,
+    ));
+    vi.mocked(api.post).mockResolvedValue({ data: { id: 10 } });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(await screen.findByRole('button', { name: /nuevo programa/i }));
+    await user.selectOptions(screen.getByRole('combobox'), '1');
+    const values = {
+      Fundamentación: 'Base pedagógica',
+      'Objetivos generales': 'Formar profesionales',
+      'Objetivos específicos': 'Resolver problemas',
+      Competencias: 'Pensamiento crítico',
+    };
+    for (const [label, value] of Object.entries(values)) {
+      await user.type(screen.getByRole('textbox', { name: label }), value);
+    }
+    await user.click(screen.getByRole('button', { name: /crear programa/i }));
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/programas', expect.objectContaining({
+      fundamentacion: values.Fundamentación,
+      objetivos_generales: values['Objetivos generales'],
+      objetivos_especificos: values['Objetivos específicos'],
+      competencias: values.Competencias,
+    })));
+  });
+
+  it('prefills existing long text fields and sends them in the edit PATCH payload', async () => {
+    sessionStorage.setItem('selected_plan_estudio_ec_id', '1');
+    const existing = {
+      id: 7,
+      plan_estudio_ec: 1,
+      anio_academico: new Date().getFullYear(),
+      descripcion: 'Programa de prueba',
+      fundamentacion: 'Fundamentación existente',
+      objetivos_generales: 'Objetivo general existente',
+      objetivos_especificos: 'Objetivos específicos existentes',
+      competencias: 'Competencias existentes',
+    };
+    vi.mocked(api.get).mockImplementation((url) => Promise.resolve(
+      url === '/programas' ? { data: { results: [existing] } } : mockResponse,
+    ));
+    vi.mocked(api.patch).mockResolvedValue({ data: existing });
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar' }));
+    const values = [
+      ['Fundamentación', existing.fundamentacion],
+      ['Objetivos generales', existing.objetivos_generales],
+      ['Objetivos específicos', existing.objetivos_especificos],
+      ['Competencias', existing.competencias],
+    ] as const;
+    for (const [label, value] of values) {
+      expect(screen.getByRole('textbox', { name: label })).toHaveValue(value);
+    }
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+
+    await vi.waitFor(() => expect(api.patch).toHaveBeenCalledWith('/programas/7', expect.objectContaining({
+      fundamentacion: existing.fundamentacion,
+      objetivos_generales: existing.objetivos_generales,
+      objetivos_especificos: existing.objetivos_especificos,
+      competencias: existing.competencias,
+    })));
   });
 
   it('shows error toast on API failure', async () => {

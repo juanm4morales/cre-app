@@ -299,6 +299,12 @@ class EspaciosCurricularesAsignadosViewSet(viewsets.ViewSet):
         except PlanEstudio.DoesNotExist:
             raise ValidationError({"plan_estudio": "Seleccioná un plan de estudio válido."})
 
+        existing_relations = PlanEstudioEC.objects.filter(espacio_curricular=espacio)
+        if existing_relations.exists() and not existing_relations.filter(plan_estudio=plan_estudio).exists():
+            raise ValidationError(
+                {"plan_estudio": "El espacio curricular seleccionado no pertenece al plan de estudio especificado."}
+            )
+
         today = timezone.now().date()
         with transaction.atomic():
             plan_ec, plan_ec_created = PlanEstudioEC.objects.get_or_create(

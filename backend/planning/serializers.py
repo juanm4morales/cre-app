@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 from django.db import models
 from rest_framework import serializers
@@ -31,6 +32,62 @@ def _docente_asignado(user, espacio_curricular_id, session=None):
         .filter(docente=user, espacio_curricular_id=espacio_curricular_id)
         .exists()
     )
+
+
+def _clase_duration_hours(clase_calendario: ClaseCalendario) -> Decimal | None:
+    dia_clase = clase_calendario.dia_clase
+    if not dia_clase or not dia_clase.hora_inicio or not dia_clase.hora_fin:
+        return None
+
+    inicio = datetime.combine(clase_calendario.fecha, dia_clase.hora_inicio)
+    fin = datetime.combine(clase_calendario.fecha, dia_clase.hora_fin)
+    seconds = (fin - inicio).total_seconds()
+    if seconds <= 0:
+        return Decimal("0")
+    return Decimal(str(seconds / 3600)).quantize(Decimal("0.01"))
+
+
+def _validate_ip_hours_within_class_duration(
+    *,
+    programa: Programa,
+    tipo_actividad: TipoActividad | None,
+    clase_calendario: ClaseCalendario | None,
+    horas,
+    instance: Actividad | None = None,
+) -> None:
+    if (
+        not tipo_actividad
+        or tipo_actividad.tipo_dedicacion != TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA
+        or clase_calendario is None
+        or horas is None
+    ):
+        return
+
+    duracion = _clase_duration_hours(clase_calendario)
+    if duracion is None:
+        return
+
+    horas = Decimal(horas)
+    existing_qs = Actividad.objects.filter(
+        programa=programa,
+        clase_calendario=clase_calendario,
+        tipo_actividad__tipo_dedicacion=TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA,
+        activo=True,
+    )
+    if instance and instance.pk:
+        existing_qs = existing_qs.exclude(pk=instance.pk)
+
+    horas_existentes = sum(existing_qs.values_list("horas", flat=True), Decimal("0"))
+    total = horas_existentes + horas
+    if total > duracion:
+        raise serializers.ValidationError(
+            {
+                "horas": (
+                    "Las horas IP de la clase no pueden superar la duración definida "
+                    f"en la agenda de cursado ({duracion} h). Ya hay {horas_existentes} h cargadas."
+                )
+            }
+        )
 
 
 class TipoActividadSerializer(serializers.ModelSerializer):
@@ -134,7 +191,16 @@ class AsignacionDocenteSerializer(serializers.ModelSerializer):
 class ProgramaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["id", "plan_estudio_ec", "anio_academico", "descripcion"]
+        fields = [
+            "id",
+            "plan_estudio_ec",
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
 
 class UnidadSerializer(serializers.ModelSerializer):
@@ -190,7 +256,16 @@ class UnidadUpdateSerializer(serializers.ModelSerializer):
 class ProgramaCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["id", "plan_estudio_ec", "anio_academico", "descripcion"]
+        fields = [
+            "id",
+            "plan_estudio_ec",
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
     def validate_plan_estudio_ec(self, value: PlanEstudioEC):
         request = self.context.get("request")
@@ -202,7 +277,14 @@ class ProgramaCreateSerializer(serializers.ModelSerializer):
 class ProgramaUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Programa
-        fields = ["anio_academico", "descripcion"]
+        fields = [
+            "anio_academico",
+            "descripcion",
+            "fundamentacion",
+            "objetivos_generales",
+            "objetivos_especificos",
+            "competencias",
+        ]
 
 
 class ActividadSerializer(serializers.ModelSerializer):
@@ -287,6 +369,7 @@ class ActividadCreateSerializer(serializers.ModelSerializer):
         clase_calendario = attrs.get("clase_calendario")
         fecha_inicio_ta = attrs.get("fecha_inicio_ta")
         fecha_fin_ta = attrs.get("fecha_fin_ta")
+        horas = attrs.get("horas")
 
         if tipo_actividad and tipo_actividad.tipo_dedicacion == TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA:
             if clase_calendario is None:
@@ -308,6 +391,12 @@ class ActividadCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"fecha_inicio_ta": "Las actividades IP no usan rango de fechas TA."}
                 )
+            _validate_ip_hours_within_class_duration(
+                programa=programa,
+                tipo_actividad=tipo_actividad,
+                clase_calendario=clase_calendario,
+                horas=horas,
+            )
         else:
             if clase_calendario is not None:
                 raise serializers.ValidationError(
@@ -369,6 +458,7 @@ class ActividadUpdateSerializer(serializers.ModelSerializer):
         clase_calendario = attrs.get("clase_calendario", actividad.clase_calendario)
         fecha_inicio_ta = attrs.get("fecha_inicio_ta", actividad.fecha_inicio_ta)
         fecha_fin_ta = attrs.get("fecha_fin_ta", actividad.fecha_fin_ta)
+        horas = attrs.get("horas", actividad.horas)
 
         if tipo_actividad and tipo_actividad.tipo_dedicacion == TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA:
             if clase_calendario is None:
@@ -390,6 +480,13 @@ class ActividadUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {"fecha_inicio_ta": "Las actividades IP no usan rango de fechas TA."}
                 )
+            _validate_ip_hours_within_class_duration(
+                programa=actividad.programa,
+                tipo_actividad=tipo_actividad,
+                clase_calendario=clase_calendario,
+                horas=horas,
+                instance=actividad,
+            )
         else:
             if clase_calendario is not None:
                 raise serializers.ValidationError(

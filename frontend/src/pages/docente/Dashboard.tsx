@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight, Gauge, MinusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import SectionCard from '../../components/Common/SectionCard';
 import api from '../../services/api';
+import { useDocenteSelection } from '../../hooks/useDocenteSelection';
 
 interface Programa {
   id: number;
@@ -169,6 +170,7 @@ function DocenteDashboard() {
   const currentYear = new Date().getFullYear();
   const [windowMode, setWindowMode] = useState<'week' | 'month'>('week');
   const [windowOffset, setWindowOffset] = useState(0);
+  const { selection } = useDocenteSelection();
 
   const { data: programas = [], isLoading: loadingProgramas } = useQuery({
     queryKey: ['programas'],
@@ -223,7 +225,7 @@ function DocenteDashboard() {
     return map;
   }, [planesEC]);
 
-  const selectedEspacioId = Number(sessionStorage.getItem('selected_espacio_curricular_id') || 0);
+  const selectedEspacioId = Number(selection.espacioId || 0);
   const espaciosSeleccionados = useMemo(
     () => espacios.filter((espacio) => espacio.id === selectedEspacioId),
     [espacios, selectedEspacioId],

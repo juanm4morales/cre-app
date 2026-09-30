@@ -16,6 +16,10 @@ const programaSchema = z.object({
   plan_estudio_ec: z.string().min(1, 'Seleccioná un plan de estudio'),
   anio_academico: z.number().min(2000, 'Año inválido'),
   descripcion: z.string().optional(),
+  fundamentacion: z.string().optional(),
+  objetivos_generales: z.string().optional(),
+  objetivos_especificos: z.string().optional(),
+  competencias: z.string().optional(),
 });
 type ProgramaFormValues = z.infer<typeof programaSchema>;
 
@@ -30,6 +34,10 @@ interface Programa {
   plan_estudio_ec: number;
   anio_academico: number;
   descripcion: string;
+  fundamentacion?: string;
+  objetivos_generales?: string;
+  objetivos_especificos?: string;
+  competencias?: string;
 }
 
 interface PlanEstudioEC {
@@ -99,6 +107,10 @@ function DocenteProgramas() {
       plan_estudio_ec: '',
       anio_academico: currentYear,
       descripcion: '',
+      fundamentacion: '',
+      objetivos_generales: '',
+      objetivos_especificos: '',
+      competencias: '',
     },
   });
 
@@ -209,7 +221,7 @@ function DocenteProgramas() {
   };
 
   const resetForm = () => {
-    resetProgramaForm({ plan_estudio_ec: '', anio_academico: currentYear, descripcion: '' });
+    resetProgramaForm({ plan_estudio_ec: '', anio_academico: currentYear, descripcion: '', fundamentacion: '', objetivos_generales: '', objetivos_especificos: '', competencias: '' });
     setEditing(null);
     setViewOnly(false);
     setShowForm(false);
@@ -234,11 +246,15 @@ function DocenteProgramas() {
   };
 
   const saveProgramaMutation = useMutation({
-    mutationFn: (payload: { plan_estudio_ec: number; anio_academico: number; descripcion: string }) => {
+    mutationFn: (payload: { plan_estudio_ec: number; anio_academico: number; descripcion: string; fundamentacion: string; objetivos_generales: string; objetivos_especificos: string; competencias: string }) => {
       if (editing) {
         return api.patch<Programa>(`/programas/${editing.id}`, {
           anio_academico: payload.anio_academico,
           descripcion: payload.descripcion,
+          fundamentacion: payload.fundamentacion,
+          objetivos_generales: payload.objetivos_generales,
+          objetivos_especificos: payload.objetivos_especificos,
+          competencias: payload.competencias,
         });
       }
       return api.post<Programa>('/programas', payload);
@@ -258,6 +274,10 @@ function DocenteProgramas() {
       plan_estudio_ec: Number(data.plan_estudio_ec),
       anio_academico: Number(data.anio_academico),
       descripcion: data.descripcion || '',
+      fundamentacion: data.fundamentacion || '',
+      objetivos_generales: data.objetivos_generales || '',
+      objetivos_especificos: data.objetivos_especificos || '',
+      competencias: data.competencias || '',
     });
   };
 
@@ -269,6 +289,10 @@ function DocenteProgramas() {
       plan_estudio_ec: String(programa.plan_estudio_ec),
       anio_academico: programa.anio_academico,
       descripcion: programa.descripcion || '',
+      fundamentacion: programa.fundamentacion || '',
+      objetivos_generales: programa.objetivos_generales || '',
+      objetivos_especificos: programa.objetivos_especificos || '',
+      competencias: programa.competencias || '',
     });
   };
 
@@ -280,6 +304,10 @@ function DocenteProgramas() {
       plan_estudio_ec: String(programa.plan_estudio_ec),
       anio_academico: programa.anio_academico,
       descripcion: programa.descripcion || '',
+      fundamentacion: programa.fundamentacion || '',
+      objetivos_generales: programa.objetivos_generales || '',
+      objetivos_especificos: programa.objetivos_especificos || '',
+      competencias: programa.competencias || '',
     });
   };
 
@@ -433,6 +461,24 @@ function DocenteProgramas() {
                 <span className="error-text" role="alert">{errorsPrograma.plan_estudio_ec.message}</span>
               )}
             </div>
+            {([
+              ['fundamentacion', 'Fundamentación'],
+              ['objetivos_generales', 'Objetivos generales'],
+              ['objetivos_especificos', 'Objetivos específicos'],
+              ['competencias', 'Competencias'],
+            ] as const).map(([name, label]) => (
+              <div className="form-group form-field-full" key={name}>
+                <label className="form-label" htmlFor={`programa-${name}`}>{label}</label>
+                <textarea
+                  id={`programa-${name}`}
+                  className="input"
+                  rows={4}
+                  placeholder={label}
+                  disabled={viewOnly}
+                  {...registerPrograma(name)}
+                />
+              </div>
+            ))}
             <div className="form-group">
               <label className="form-label form-label-required">
                 <Calendar size={16} /> Año Académico

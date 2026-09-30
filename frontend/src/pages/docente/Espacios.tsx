@@ -7,6 +7,7 @@ import SectionCard from '../../components/Common/SectionCard';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/errors';
+import { setDocenteSelection } from '../../hooks/useDocenteSelection';
 
 interface EspacioCurricular {
   id: number;
@@ -144,9 +145,11 @@ export default function DocenteEspacios() {
       const { espacio, plan_estudio_ec_id: planEcId } = response.data;
       queryClient.invalidateQueries({ queryKey: ['espacios-asignados'] });
       queryClient.invalidateQueries({ queryKey: ['planes-estudio-ec'] });
-      sessionStorage.setItem('selected_espacio_curricular_id', String(espacio.id));
-      sessionStorage.setItem('selected_plan_estudio_ec_id', String(planEcId));
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: String(espacio.id),
+        planEstudioEcId: String(planEcId),
+        espacioNombre: espacio.nombre,
+      });
       setTemporaryForm((current) => ({ ...defaultTemporaryForm, plan_estudio: current.plan_estudio }));
       toast.success('Espacio temporal cargado y asignado. Ya podés crear el programa y planificar.');
     },
@@ -178,9 +181,11 @@ export default function DocenteEspacios() {
       const { espacio, plan_estudio_ec_id: planEcId } = response.data;
       queryClient.invalidateQueries({ queryKey: ['espacios-asignados'] });
       queryClient.invalidateQueries({ queryKey: ['planes-estudio-ec'] });
-      sessionStorage.setItem('selected_espacio_curricular_id', String(espacio.id));
-      sessionStorage.setItem('selected_plan_estudio_ec_id', String(planEcId));
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: String(espacio.id),
+        planEstudioEcId: String(planEcId),
+        espacioNombre: espacio.nombre,
+      });
       setExistingAssignmentForm((current) => ({ ...defaultExistingAssignmentForm, plan_estudio: current.plan_estudio }));
       toast.success('Espacio existente asignado. Ya podés crear el programa y planificar.');
     },
@@ -209,14 +214,54 @@ export default function DocenteEspacios() {
     [espaciosAsignadosIds, espaciosCatalogo],
   );
 
+  // 1. Filtrar Espacios Curriculares disponibles según el Plan seleccionado
+  const espaciosDisponiblesFiltrados = useMemo(() => {
+    if (!existingAssignmentForm.plan_estudio) {
+      return espaciosDisponiblesParaAsignar;
+    }
+    const selectedPlanId = Number(existingAssignmentForm.plan_estudio);
+    const validEspacioIds = new Set(
+      planEcsData
+        .filter((pe) => pe.plan_estudio === selectedPlanId)
+        .map((pe) => pe.espacio_curricular)
+    );
+
+    if (validEspacioIds.size === 0) {
+      return espaciosDisponiblesParaAsignar;
+    }
+
+    return espaciosDisponiblesParaAsignar.filter((espacio) => validEspacioIds.has(espacio.id));
+  }, [existingAssignmentForm.plan_estudio, espaciosDisponiblesParaAsignar, planEcsData]);
+
+  // 2. Filtrar Planes de Estudio según el Espacio Curricular seleccionado
+  const planesFiltrados = useMemo(() => {
+    if (!existingAssignmentForm.espacio_curricular) {
+      return planes;
+    }
+    const selectedEspacioId = Number(existingAssignmentForm.espacio_curricular);
+    const validPlanIds = new Set(
+      planEcsData
+        .filter((pe) => pe.espacio_curricular === selectedEspacioId)
+        .map((pe) => pe.plan_estudio)
+    );
+
+    if (validPlanIds.size === 0) {
+      return planes;
+    }
+
+    return planes.filter((plan) => validPlanIds.has(plan.id));
+  }, [existingAssignmentForm.espacio_curricular, planes, planEcsData]);
+
   const handleSelectEspacio = (espacio: EspacioCurricular) => {
     const planEcId = planEcsMap.get(espacio.id);
     if (planEcId) {
-      sessionStorage.setItem('selected_espacio_curricular_id', espacio.id.toString());
-      sessionStorage.setItem('selected_plan_estudio_ec_id', planEcId.toString());
-      sessionStorage.setItem('selected_espacio_nombre', espacio.nombre);
+      setDocenteSelection({
+        espacioId: espacio.id.toString(),
+        planEstudioEcId: planEcId.toString(),
+        espacioNombre: espacio.nombre,
+      });
 
-      navigate('/docente/programas');
+      navigate('/docente/resumen');
       return;
     }
 
@@ -228,7 +273,40 @@ export default function DocenteEspacios() {
   };
 
   const handleExistingAssignmentFieldChange = (field: keyof ExistingAssignmentForm, value: string) => {
-    setExistingAssignmentForm((current) => ({ ...current, [field]: value }));
+    setExistingAssignmentForm((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === 'plan_estudio') {
+        if (value && next.espacio_curricular) {
+          const selectedPlanId = Number(value);
+          const selectedEspacioId = Number(next.espacio_curricular);
+          const isEspacioValidForPlan = planEcsData.some(
+            (pe) => pe.plan_estudio === selectedPlanId && pe.espacio_curricular === selectedEspacioId
+          );
+          if (!isEspacioValidForPlan) {
+            next.espacio_curricular = '';
+          }
+        }
+      } else if (field === 'espacio_curricular') {
+        if (value) {
+          const selectedEspacioId = Number(value);
+          const matchingPlanEcs = planEcsData.filter((pe) => pe.espacio_curricular === selectedEspacioId);
+          if (matchingPlanEcs.length === 1) {
+            const firstMatch = matchingPlanEcs[0];
+            if (firstMatch) {
+              next.plan_estudio = String(firstMatch.plan_estudio);
+            }
+          } else if (next.plan_estudio) {
+            const isPlanValidForEspacio = matchingPlanEcs.some((pe) => pe.plan_estudio === Number(next.plan_estudio));
+            if (!isPlanValidForEspacio) {
+              next.plan_estudio = '';
+            }
+          }
+        }
+      }
+
+      return next;
+    });
   };
 
   const handleCreateTemporaryEspacio = (event: FormEvent<HTMLFormElement>) => {
@@ -458,7 +536,7 @@ export default function DocenteEspacios() {
               required
             >
               <option value="">Seleccionar espacio</option>
-              {espaciosDisponiblesParaAsignar.map((espacio) => (
+              {espaciosDisponiblesFiltrados.map((espacio) => (
                 <option key={espacio.id} value={espacio.id}>
                   {espacio.codigo} · {espacio.nombre} · {espacio.creditos} créditos
                 </option>
@@ -474,7 +552,7 @@ export default function DocenteEspacios() {
               required
             >
               <option value="">Seleccionar plan</option>
-              {planes.map((plan) => (
+              {planesFiltrados.map((plan) => (
                 <option key={plan.id} value={plan.id}>{plan.nombre}</option>
               ))}
             </select>

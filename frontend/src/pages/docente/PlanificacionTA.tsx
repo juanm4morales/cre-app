@@ -119,6 +119,13 @@ function formatHours(value: number): string {
   return `${value.toFixed(1)}h`;
 }
 
+function formatRemainingTime(minutes: number): string {
+  if (minutes >= 60) {
+    return `${(minutes / 60).toFixed(1)} hs`;
+  }
+  return `${minutes} min`;
+}
+
 function DocentePlanificacionTA() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -247,9 +254,9 @@ function DocentePlanificacionTA() {
       return 'Con esta carga quedás muy cerca del objetivo TA.';
     }
     if (taFeedbackState === 'yellow') {
-      return `Atención: quedarían ${taRestantesMinutos} min para llegar al objetivo TA.`;
+      return `Atención: quedarían ${formatRemainingTime(taRestantesMinutos)} para llegar al objetivo TA.`;
     }
-    return `Quedan ${taRestantesMinutos} min disponibles para actividades TA.`;
+    return `Quedan ${formatRemainingTime(taRestantesMinutos)} disponibles para actividades TA.`;
   }, [horasTaObjetivo, taExcesoMinutos, taFeedbackState, taRestantesMinutos]);
 
   const taRangesByDate = useMemo(() => {

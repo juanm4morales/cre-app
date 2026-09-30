@@ -54,6 +54,11 @@ class Programa(models.Model):
         help_text="Descripción del programa"
     )
 
+    fundamentacion = models.TextField(blank=True)
+    objetivos_generales = models.TextField(blank=True)
+    objetivos_especificos = models.TextField(blank=True)
+    competencias = models.TextField(blank=True)
+
     activo = models.BooleanField(
         default=True,
         db_index=True,

@@ -9,6 +9,10 @@ class ProgramaForm(forms.ModelForm):
         fields = [
             'anio_academico',
             'descripcion',
+            'fundamentacion',
+            'objetivos_generales',
+            'objetivos_especificos',
+            'competencias',
         ]
         widgets = {
             'anio_academico': forms.NumberInput(attrs={

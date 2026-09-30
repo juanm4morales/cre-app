@@ -773,3 +773,47 @@ textarea.input {
   content: " *";
   color: var(--color-danger);
 }
+
+/* ── Skeleton Loaders ── */
+.skeleton-loader {
+  background: var(--color-border);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+  100% { opacity: 0.6; }
+}
+
+:root.dark .skeleton-loader {
+  background: var(--color-bg-elevated);
+}
+
+.skeleton-table-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 0.5rem 0;
+}
+
+.skeleton-table-header,
+.skeleton-tr {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.skeleton-th,
+.skeleton-td {
+  flex: 1;
+}
+
+.skeleton-card {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
