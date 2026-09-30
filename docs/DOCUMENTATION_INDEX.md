@@ -8,6 +8,8 @@ Para orientarse en el checkout actual, empezar por los manuales contrastados con
 
 - [Manual de desarrollo](manuales/DEVELOPER_MANUAL.md) · [LaTeX](manuales/DEVELOPER_MANUAL.tex) · [PDF](manuales/DEVELOPER_MANUAL.pdf): arquitectura, dominio, API, frontend, pruebas y hallazgos pendientes.
 - [Manual de despliegue](manuales/DEPLOYMENT_MANUAL.md) · [LaTeX](manuales/DEPLOYMENT_MANUAL.tex) · [PDF](manuales/DEPLOYMENT_MANUAL.pdf): configuración, red, backups, workflows y operación.
+- [Apéndices técnicos](manuales/APENDICES.md) · [LaTeX](manuales/APENDICES.tex) · [PDF](manuales/APENDICES.pdf): detalle de respaldo para los dos manuales anteriores.
+- [Harness de aceptación y su informe](manuales/validation/README.md) · [informe de resultados](manuales/validation/ACCEPTANCE_REPORT.md): pruebas reproducibles del recorrido self-hosted.
 
 Los documentos LaTeX toman el contenido completo de sus archivos Markdown correspondientes y usan los PDF de `docs/manuales/diagrams/` para las figuras. El Markdown es la fuente canónica del contenido. Desde la carpeta `docs/manuales/`, con una distribución TeX que incluya el paquete `markdown`, compilar cada fuente dos veces con XeLaTeX y shell escape para actualizar el índice y generar los PDF en una carpeta temporal:
 

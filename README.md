@@ -111,6 +111,7 @@ Rutas actuales: ver [`config.urls`](./backend/config/urls.py).
 
 - [Manual de desarrollo](./docs/manuales/DEVELOPER_MANUAL.md) · [LaTeX](./docs/manuales/DEVELOPER_MANUAL.tex) · [PDF](./docs/manuales/DEVELOPER_MANUAL.pdf): arquitectura, dominio, API, frontend y verificación.
 - [Manual de despliegue](./docs/manuales/DEPLOYMENT_MANUAL.md) · [LaTeX](./docs/manuales/DEPLOYMENT_MANUAL.tex) · [PDF](./docs/manuales/DEPLOYMENT_MANUAL.pdf): configuración operativa, redes, backups y workflows observados.
+- [Apéndices técnicos](./docs/manuales/APENDICES.md) · [LaTeX](./docs/manuales/APENDICES.tex) · [PDF](./docs/manuales/APENDICES.pdf): detalle de ramas, contratos, riesgos y evidencia de las pruebas.
 
 ## Tests
 

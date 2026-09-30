@@ -1,0 +1,16 @@
+PASS: build identity writes prepared release before finalization
+PASS: service and www-data can traverse release parents
+PASS: service reads/executes finalized source but cannot write code or venv
+PASS: service reads env; www-data cannot read env
+PASS: service writes STATIC_ROOT; www-data reads static output
+PASS: current is published atomically only after release checks
+PASS: container permission proof completed
+PASS: build identity writes prepared release before finalization
+PASS: service and www-data can traverse release parents
+PASS: service reads/executes finalized source but cannot write code or venv
+PASS: service reads env; www-data cannot read env
+PASS: service writes STATIC_ROOT; www-data reads static output
+PASS: current is published atomically only after release checks
+PASS: container permission proof completed
+["python@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b"]
+["python@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b"]

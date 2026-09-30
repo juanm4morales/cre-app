@@ -75,8 +75,9 @@
 % Nginx -> Estáticos (salida superior)
 \draw[staticEdge] ([yshift=8pt]nginx.east) -- ++(1.8, 0) node[above=2pt,midway,font=\scriptsize,text=staticStroke] {Estáticos} |- (statics.west);
 
-% Nginx -> Gunicorn (salida inferior hacia socket UNIX)
-\draw[socketEdge] ([yshift=-8pt]nginx.east) -- ++(1.8, 0) node[below=2pt,midway,font=\scriptsize,text=appStroke] {Socket UNIX} |- (gunicorn.west);
+% Nginx -> Gunicorn (TCP loopback, conforme al bind del servicio)
+\draw[socketEdge] ([yshift=-8pt]nginx.east) -- ++(3.0, 0) |- (gunicorn.west);
+\node[font=\scriptsize,text=appStroke,align=center] at (7.8,-0.85) {TCP loopback\\127.0.0.1:8000};
 
 % Gunicorn -> PostgreSQL
 \draw[dbEdge] (gunicorn) -- node[above=2pt,midway,font=\scriptsize,text=dbStroke] {TCP local} (postgres);

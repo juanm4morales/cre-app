@@ -19,7 +19,7 @@
   colorlinks=true,
   linkcolor=CREBlue,
   urlcolor=CREBlue,
-  pdftitle={Manual de desarrollo y mantenimiento de CREApp},
+  pdftitle={Manual de Arquitectura y Desarrollo de CREApp},
   pdfsubject={Manual completo de desarrollo y mantenimiento}
 }
 \setlength{\emergencystretch}{6em}
@@ -87,7 +87,9 @@
 \makeatletter
 \def\markdownLaTeXReadAlignments#1{%
   \advance\markdownLaTeXColumnCounter by 1\relax
-  \ifnum\markdownLaTeXColumnTotal=2\relax
+  \ifnum\markdownLaTeXColumnTotal>3\relax
+    \addto@hook\markdownLaTeXTableAlignment{p{\dimexpr\linewidth/\markdownLaTeXColumnTotal-2\tabcolsep\relax}}%
+  \else\ifnum\markdownLaTeXColumnTotal=2\relax
     \ifnum\markdownLaTeXColumnCounter=1\relax
       \addto@hook\markdownLaTeXTableAlignment{p{.24\linewidth}}%
     \else
@@ -99,7 +101,7 @@
     \else
       \addto@hook\markdownLaTeXTableAlignment{p{.37\linewidth}}%
     \fi
-  \fi
+  \fi\fi
   \ifnum\markdownLaTeXColumnCounter<\markdownLaTeXColumnTotal\relax\else
     \expandafter\@gobble
   \fi\markdownLaTeXReadAlignments}
@@ -160,6 +162,8 @@
 {\small\color{black!70}
 Universidad Nacional de Cuyo --- Sistema de Gestión Curricular y Equivalencias (CREApp)\par
 Este documento describe el modelo relacional, las reglas de negocio, los contratos HTTP y las guías de contribución.
+\par\vspace{0.25em}
+Cobertura documental: desarrollo de producto y destinos Azure o self-hosted. Este documento no verifica infraestructura ni despliegues en ejecución.
 }
 \end{titlepage}
 \pagenumbering{roman}

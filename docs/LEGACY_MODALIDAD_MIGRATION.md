@@ -2,6 +2,8 @@
 
 Procedimiento manual para un futuro PostgreSQL que aún esté en `planning.0008` o anterior y conserve `tipo_actividad.modalidad_trabajo`. No conecta a ninguna base, no ejecuta migraciones ni cambia datos.
 
+Este procedimiento no es para la base descrita por la auditoría previa: allí se informó que `0009`, `0011` y `0012` ya estaban aplicadas, aunque ese estado no se ha verificado en esta sesión. La aplicación de `0012` no recupera los valores eliminados por `0009`. Sin una copia autorizada anterior a `0009`, los datos descartados no pueden recuperarse desde el esquema actual. Verifique historial y esquema actuales antes de cualquier acción.
+
 ## Antes de empezar
 
 - Aplique primero cualquier decisión de producto/esquema en Azure, la rama autoritativa; sincronice luego las variantes derivadas. No modifique aquí las ramas históricas `dev`, `frontend-modernization`, `legacy/cross-site` ni `unidades`.
@@ -78,6 +80,6 @@ El recuento por actividad es opcional. Documente también resultados para `GRU`,
 
 ## Límites y parada
 
-En producción, `0009` y `0011` ya fueron aplicadas y la columna `tipo_actividad.modalidad_trabajo` no existe; `0012` no está aplicada. Por ello no se pueden exportar allí esos valores antiguos desde la tabla actual: solo sería posible recuperarlos de una copia anterior a `0009`, si existe y se restaura de forma aislada y autorizada. No intente recrear la columna ni inferir datos desde `actividad`.
+La auditoría previa describió la base Azure como de prueba/prelanzamiento y reportó que `0009`, `0011` y `0012` ya estaban aplicadas y que la columna `tipo_actividad.modalidad_trabajo` no existía; no se verificó aquí el estado actual. Según ese reporte, los valores antiguos no se pueden exportar desde la tabla actual. Solo podrían recuperarse de una copia anterior a `0009`, si existe y se restaura de forma aislada y autorizada. La aplicación de `0012` no revierte ni recupera los datos que `0009` eliminó. No intente recrear la columna ni inferir datos desde `actividad`.
 
-Este documento no autoriza acceso o extracción de datos, no incluye automatización, no ejecuta `0009` ni `0012` y no contempla despliegues. Deténgase y escale al responsable de datos si la identidad, el historial, el esquema, el recuento, la integridad del archivo, la retención o la restauración no pueden verificarse.
+Este documento no autoriza acceso o extracción de datos, no incluye automatización, no ejecuta `0009` ni `0012` y no contempla despliegues. Para el procedimiento general de despliegue, consulte el [manual de despliegue](manuales/DEPLOYMENT_MANUAL.md). Deténgase y escale al responsable de datos si la identidad, el historial, el esquema, el recuento, la integridad del archivo, la retención o la restauración no pueden verificarse.

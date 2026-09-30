@@ -18,8 +18,8 @@
   colorlinks=true,
   linkcolor=CREBlue,
   urlcolor=CREBlue,
-  pdftitle={Manual de Despliegue de CREApp},
-  pdfsubject={Manual operativo completo de despliegue}
+  pdftitle={Apéndices técnicos de CREApp},
+  pdfsubject={Apéndices de auditoría y riesgos conocidos}
 }
 \setlength{\emergencystretch}{6em}
 \sloppy
@@ -30,7 +30,7 @@
 \pagestyle{fancy}
 \fancyhf{}
 \fancyhead[L]{CREApp}
-\fancyhead[R]{Manual de despliegue}
+\fancyhead[R]{Apéndices técnicos}
 \fancyfoot[C]{\thepage}
 \renewcommand{\headrulewidth}{0.3pt}
 
@@ -123,9 +123,9 @@
 \vspace*{1.5cm}
 {\Large\bfseries\color{CREBlue} CREApp \textbar\ Sistema de Planificación y Gestión Curricular\par}
 \vspace{1.2cm}
-{\Huge\bfseries Manual de Despliegue de CREApp\par}
+{\Huge\bfseries Apéndices técnicos de CREApp\par}
 \vspace{0.6cm}
-{\large\color{black!80} Guía de producción para servidores locales, virtualizados y entornos on-premises\par}
+{\large\color{black!80} Auditoría de ramas, contratos, riesgos y evidencia de validación\par}
 \vspace{1.0cm}
 \noindent{\color{CREBlue}\rule{\textwidth}{1.5pt}}
 \vspace{1.0cm}
@@ -134,8 +134,8 @@
 \centering
 \begin{tabular}{ll}
 \toprule
-\textbf{Código del Documento:} & CREAPP-OPS-01 \\
-\textbf{Versión:} & 2.0 (Edición On-Premises) \\
+\textbf{Código del Documento:} & CREAPP-OPS-02 \\
+\textbf{Versión:} & 3.0 \\
 \textbf{Autor:} & Juan Martín Morales \\
 \textbf{Repositorio:} & \url{https://github.com/juanm4morales/cre-app} \\
 \textbf{Clasificación:} & Documentación Técnica de Operaciones \\
@@ -148,7 +148,7 @@
 \vfill
 {\small\color{black!70}
 Universidad Nacional de Cuyo --- Sistema de Gestión Curricular y Equivalencias (CREApp)\par
-Este documento describe la instalación, aseguramiento, operación y recuperación del servicio en infraestructura local.
+Este documento reúne el detalle de respaldo de los manuales de despliegue y desarrollo.
 \par\vspace{0.25em}
 Cobertura documental: servidores propios y Azure. Este documento no verifica infraestructura ni despliegues en ejecución.
 }
@@ -159,5 +159,5 @@ Cobertura documental: servidores propios y Azure. Este documento no verifica inf
 \pagenumbering{arabic}
 \section*{Propósito y alcance}
 \addcontentsline{toc}{section}{Propósito y alcance}
-\markdownInput{DEPLOYMENT_MANUAL.md}
+\markdownInput{APENDICES.md}
 \end{document}

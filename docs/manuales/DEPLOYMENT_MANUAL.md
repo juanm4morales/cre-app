@@ -1,141 +1,157 @@
 # Manual de Despliegue de CREApp
-## Guía de instalación y operación para servidores locales
 
-**Autor:** Juan Martín Morales  
-**Repositorio:** [https://github.com/juanm4morales/cre-app](https://github.com/juanm4morales/cre-app)  
-**Versión:** 2.0 (Edición On-Premises)
+**Autor:** Juan Martín Morales
+**Repositorio:** [github.com/juanm4morales/cre-app](https://github.com/juanm4morales/cre-app)
+**Versión:** 3.0
 
-Este manual describe el procedimiento para desplegar **CREApp** en un servidor local o máquina virtual (on-premises), así como las pautas de publicación en proveedores cloud (Microsoft Azure), de forma rápida, robusta y directa.
+CREApp es una SPA de React que consume una API Django sobre PostgreSQL. Hay **dos destinos válidos**: un servidor propio (self-hosted) o Microsoft Azure App Service. Ambos se describen aquí con el mismo nivel de detalle; elija según las reglas de red y operación de su institución.
 
----
+Para el detalle técnico de ramas, diferencias de routing y riesgos conocidos, ver [`APENDICES.md`](APENDICES.md). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
 
-## 1. Arquitectura y Requisitos Mínimos
+## 1. Requisitos
 
-CREApp está compuesta por:
-* **Frontend:** Aplicación web ([React](https://react.dev/) / TypeScript compilada con [Vite](https://vite.dev/)). Nginx la entrega directamente como archivos estáticos.
-* **Backend:** API REST en [Django](https://docs.djangoproject.com/es/6.0/) (Python) servida mediante [Gunicorn WSGI](https://docs.gunicorn.org/).
-* **Base de Datos:** [PostgreSQL](https://www.postgresql.org/docs/) para persistencia relacional con transacciones ACID.
-* **Proxy Inverso:** [Nginx](https://nginx.org/en/docs/) para terminación TLS/HTTPS y derivación de peticiones.
+| Componente | Versión |
+|---|---|
+| Python | 3.13 (venv) |
+| Node.js | 22 LTS (solo para compilar el frontend) |
+| PostgreSQL | 17 o superior soportado por el proveedor |
+| Nginx | Cualquier versión estable reciente |
 
-![Topología de arquitectura en servidor local](diagrams/deployment.svg)
+Los valores de CPU, RAM y disco son una orientación inicial, no un mínimo medido. Dimensione según carga y disponibilidad reales.
 
-### Requisitos mínimos del sistema
+## 2. Despliegue self-hosted
 
-* **Hardware:** 1 vCPU, 2 GB de memoria RAM y 10 GB de disco.
-* **Sistema Operativo:** Ejemplos de usuarios, grupos y rutas para Debian/Ubuntu; adapte el usuario del servidor web, servicios y rutas en otras distribuciones.
-* **Software base:**
-  * Python 3.13 con soporte para [entornos virtuales (venv)](https://docs.python.org/es/3.13/library/venv.html).
-  * PostgreSQL 17 (versión utilizada en el Compose de desarrollo).
-  * Node.js 22 y `npm` (necesario para compilar el frontend).
-  * Nginx (o cualquier proxy inverso equivalente).
+Topología: Nginx termina TLS y sirve la SPA; Django corre con Gunicorn en `127.0.0.1:8000`; PostgreSQL acepta conexiones solo por loopback.
 
-### Ramas del repositorio y selección para despliegue
+![Arquitectura del servidor propio](diagrams/deployment.svg)
 
-* **`azure` (Base de referencia):** Rama same-origin (`VITE_API_URL=/api`, `VITE_STATIC_BASE=/api/static/`, prefijo de admin `/api/sadmin-creapp-panel/`). Para un servidor propio, despliegue un SHA revisado y aprobado derivado de esta rama; no despliegue `main` por defecto.
-* **`azure-same-origin`:** Variante técnica derivada de `azure`. La divergencia intencional respecto a `azure` se concentra exclusivamente en archivos de enrutamiento y despliegue (`backend/config/settings.py`, `backend/config/urls.py`, `frontend/src/App.tsx`, `frontend/vite.config.js`). Los cambios de producto o dominio deben incorporarse primero en `azure` y propagarse hacia adelante (*sync forward*).
-* **`main`:** Rama histórica (*trunk*). **Advertencia:** En GitHub Actions tiene asociados dos flujos de trabajo concurrentes (`deploy.yml` y `main_cre-app-api.yml`). Se recomienda utilizar `azure` como rama oficial de despliegue.
-* **`dev`:** Rama de integración continua y desarrollo de nuevas características.
-* **`docs/developer-handbook`:** Rama de documentación técnica, manuales operativos (LaTeX/Markdown) y diagramas de arquitectura.
+### Paso 1 — Usuarios, checkout y permisos
 
----
-
-## 2. Método recomendado: PostgreSQL nativo + Gunicorn + Nginx
-
-Para administradores que prefieren gestionar los servicios directamente en el sistema operativo mediante [systemd](https://www.freedesktop.org/software/systemd/man/systemd.service.html):
-
-### Paso 1: Aprobar el código y preparar el checkout
-
-No use el `main` predeterminado ni una rama móvil como release. Confirme el SHA completo revisado y aprobado de `azure` (o de una rama/release derivada de `azure` que incluya ese cambio), registre ese SHA y haga checkout detached. Desplegar en este servidor no requiere ni debe implicar hacer push a `azure`.
+Se usan tres identidades: `creapp-build` compila, `creapp` ejecuta la aplicación y `www-data` sirve archivos. El código publicado nunca es escribible por el proceso web.
 
 ```sh
-sudo useradd --system --no-create-home --home-dir /srv/creapp --shell /usr/sbin/nologin --gid www-data creapp
-sudo install -d -o creapp -g www-data -m 0750 /srv/creapp
-sudo -u creapp git clone --branch azure --no-checkout https://github.com/juanm4morales/cre-app.git /srv/creapp
-sudo -u creapp git -C /srv/creapp fetch origin azure
-sudo -u creapp git -C /srv/creapp checkout --detach <SHA_COMPLETO_REVISADO>
-sudo -u creapp git -C /srv/creapp rev-parse HEAD
+set -eu
+SHA_APROBADO='<SHA_COMPLETO_APROBADO>'   # commit revisado y aprobado
+REF_APROBADA='<REF_APROBADA>'           # rama o tag que lo contiene
+
+if ! getent group creapp >/dev/null; then sudo groupadd --system creapp; fi
+id -u creapp >/dev/null 2>&1 || sudo useradd --system --gid creapp --groups www-data \
+  --home-dir /nonexistent --no-create-home --shell /usr/sbin/nologin creapp
+
+if ! getent group creapp-build >/dev/null; then sudo groupadd --system creapp-build; fi
+id -u creapp-build >/dev/null 2>&1 || sudo useradd --system --gid creapp-build \
+  --groups www-data --home-dir /var/lib/creapp-build --create-home \
+  --shell /usr/sbin/nologin creapp-build
+
+sudo install -d -o root -g www-data -m 0750 /srv/creapp /srv/creapp/releases
+sudo install -d -o root -g creapp -m 0750 /etc/creapp
+
+RELEASE="/srv/creapp/releases/$SHA_APROBADO"
+test ! -e "$RELEASE" || { echo 'El release ya existe' >&2; exit 1; }
+sudo install -d -o creapp-build -g www-data -m 0750 "$RELEASE"
+
+sudo -H -u creapp-build git clone --no-checkout \
+  https://github.com/juanm4morales/cre-app.git "$RELEASE"
+sudo -H -u creapp-build git -C "$RELEASE" fetch --no-tags origin "$REF_APROBADA"
+sudo -H -u creapp-build git -C "$RELEASE" checkout --detach "$SHA_APROBADO"
+test "$(sudo -H -u creapp-build git -C "$RELEASE" rev-parse HEAD)" = "$SHA_APROBADO"
 ```
 
-Compare `git rev-parse HEAD` con el SHA aprobado y deténgase si no coincide. En una instalación real, el checkout y código deben pertenecer al operador de despliegue (`creapp` aquí), no a `www-data` ni al proceso web.
+### Paso 2 — PostgreSQL privado
 
-### Paso 2: Crear la base de datos en PostgreSQL
-Conéctese a PostgreSQL y cree el usuario y la base conforme a las directivas de seguridad de [roles y privilegios de PostgreSQL](https://www.postgresql.org/docs/current/user-manag.html):
+```sh
+sudo -u postgres psql
+```
+
 ```sql
-CREATE USER creapp_usr WITH PASSWORD 'contraseña_segura';
+CREATE ROLE creapp_usr LOGIN;
+\password creapp_usr
 CREATE DATABASE creapp_db OWNER creapp_usr ENCODING 'UTF8';
+\q
 ```
 
-### Paso 3: Crear el archivo de entorno
+Fije `listen_addresses = '127.0.0.1'` en `postgresql.conf` y agregue al inicio de `pg_hba.conf`:
 
-Guarde `/etc/creapp/creapp.env` como asignaciones `NOMBRE=valor` compatibles con `EnvironmentFile` de systemd, propiedad `root:creapp` y modo `0640` (no haga `source` de este archivo en una shell). Proteja el secreto y contraseña; no los copie al checkout. Configure valores reales y flags de HTTPS:
+```conf
+host    creapp_db    creapp_usr    127.0.0.1/32    scram-sha-256
+```
+
+```sh
+sudo systemctl restart postgresql
+sudo ss -ltnp | grep 5432     # debe mostrar solo 127.0.0.1
+```
+
+Nunca abra 5432 a la red. Para una base remota consulte el apéndice sobre TLS.
+
+### Paso 3 — Archivo de entorno
+
+```sh
+sudo install -o root -g creapp -m 0640 /dev/null /etc/creapp/creapp.env
+sudoedit /etc/creapp/creapp.env
+```
+
 ```ini
 DEBUG=False
-SECRET_KEY=generar_una_clave_aleatoria_segura_de_50_caracteres
-ALLOWED_HOSTS=creapp.institucion.edu.ar,192.168.1.50,localhost
+SECRET_KEY=<generado con python3 -c 'import secrets; print(secrets.token_urlsafe(50))'>
+ALLOWED_HOSTS=<FQDN_REAL>
 POSTGRES_DB=creapp_db
 POSTGRES_USER=creapp_usr
-POSTGRES_PASSWORD=contraseña_segura
+POSTGRES_PASSWORD=<secreto>
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
-CSRF_TRUSTED_ORIGINS=https://creapp.institucion.edu.ar
-CORS_ALLOWED_ORIGINS=https://creapp.institucion.edu.ar
+CSRF_TRUSTED_ORIGINS=https://<FQDN_REAL>
 CSRF_COOKIE_SECURE=True
 SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SAMESITE=Lax
+SESSION_COOKIE_SAMESITE=Lax
+SECURE_SSL_REDIRECT=True
 ```
-*(Consulte la documentación de [`ALLOWED_HOSTS`](https://docs.djangoproject.com/es/6.0/ref/settings/#allowed-hosts), [`CSRF_TRUSTED_ORIGINS`](https://docs.djangoproject.com/es/6.0/ref/settings/#csrf-trusted-origins) y cookies de seguridad en Django).*
 
-### Paso 4: Instalar, construir y desplegar
+`ALLOWED_HOSTS` lleva hostnames sin esquema. El archivo es de systemd, no un script de shell: use líneas `NOMBRE=valor` sin `export` ni comillas, y no haga `source`.
 
-Use directorios de trabajo explícitos. Antes de Django `collectstatic`, compile la SPA: los archivos generados son parte de `STATICFILES_DIRS`. Las migraciones se ejecutan solo en la DB aprobada, después de revisar el plan y tomar backup; no se ejecutan automáticamente al iniciar el servicio. En una instalación nueva, confirme que dispone de los datos iniciales necesarios y de un seed/importador corregido y probado para una base vacía; `migrate` no garantiza todos los datos operativos.
+### Paso 4 — Compilar, migrar y recolectar estáticos
+
+El frontend se compila **antes** de `collectstatic`, porque el build entra en los estáticos de Django. Las migraciones son una operación separada y autorizada.
 
 ```sh
-# Desde /srv/creapp, como operador de despliegue
-python3 -m venv /srv/creapp/.venv
-/srv/creapp/.venv/bin/pip install --upgrade pip
-/srv/creapp/.venv/bin/pip install -r /srv/creapp/requirements.txt
+set -eu
+RELEASE="/srv/creapp/releases/$SHA_APROBADO"
 
-# npm ci y build son previos a collectstatic; Vite incorpora estas variables al build.
-cd /srv/creapp/frontend
-npm ci
-VITE_API_URL=/api VITE_STATIC_BASE=/api/static/ npm run build
+sudo -H -u creapp-build python3.13 -m venv "$RELEASE/.venv"
+sudo -H -u creapp-build "$RELEASE/.venv/bin/pip" install --upgrade pip
+sudo -H -u creapp-build "$RELEASE/.venv/bin/pip" install -r "$RELEASE/requirements.txt"
 
-# Cargar el entorno de forma segura mediante systemd (no source del archivo).
-# Revisar el plan antes de aplicar cambios a la DB autorizada.
-sudo systemd-run --wait --pipe --collect \
-  -p User=creapp -p Group=www-data \
-  -p WorkingDirectory=/srv/creapp/backend \
-  -p EnvironmentFile=/etc/creapp/creapp.env \
-  /srv/creapp/.venv/bin/python manage.py migrate --plan
+sudo -H -u creapp-build sh -c 'cd "$1/frontend" && npm ci && \
+  VITE_API_URL=/api VITE_STATIC_BASE=/api/static/ npm run build' sh "$RELEASE"
 
-# Ejecutar solo con autorización, backup confirmado y ventana aprobada.
-sudo systemd-run --wait --pipe --collect \
-  -p User=creapp -p Group=www-data \
-  -p WorkingDirectory=/srv/creapp/backend \
-  -p EnvironmentFile=/etc/creapp/creapp.env \
-  /srv/creapp/.venv/bin/python manage.py migrate --noinput
-
-# creapp escribe STATIC_ROOT; Nginx debe poder leerlo.
-sudo install -d -o creapp -g www-data -m 0750 /srv/creapp/backend/staticfiles
-sudo systemd-run --wait --pipe --collect \
-  -p User=creapp -p Group=www-data \
-  -p WorkingDirectory=/srv/creapp/backend \
-  -p EnvironmentFile=/etc/creapp/creapp.env \
-  /srv/creapp/.venv/bin/python manage.py collectstatic --noinput
+# El código publicado no se modifica desde aquí en adelante.
+sudo chown -R root:www-data "$RELEASE"
+sudo find "$RELEASE" -type d -exec chmod 0750 {} +
+sudo find "$RELEASE" -type f -exec chmod u=rwX,g=rX,o= {} +
+sudo install -d -o creapp -g www-data -m 2750 "$RELEASE/backend/staticfiles"
 ```
-*(Los comandos administrativos corresponden a [`manage.py migrate`](https://docs.djangoproject.com/es/6.0/ref/django-admin/#migrate), [`collectstatic`](https://docs.djangoproject.com/es/6.0/ref/contrib/staticfiles/#collectstatic) y al empaquetado de producción de [Vite Build](https://vite.dev/guide/build.html)).*
 
-Después de aplicar migraciones, cree deliberadamente una cuenta administrativa si corresponde. Ejecute `createsuperuser` interactivamente; no ponga contraseñas en argumentos, logs ni archivos de entorno:
+Los comandos Django se ejecutan con el entorno de producción:
 
 ```sh
-sudo systemd-run --pty --wait --collect \
-  -p User=creapp -p Group=www-data \
-  -p WorkingDirectory=/srv/creapp/backend \
-  -p EnvironmentFile=/etc/creapp/creapp.env \
-  /srv/creapp/.venv/bin/python manage.py createsuperuser
+as_app() {
+  sudo systemd-run --wait --pipe --collect \
+    -p User=creapp -p Group=creapp -p SupplementaryGroups=www-data \
+    -p WorkingDirectory="$RELEASE/backend" \
+    -p EnvironmentFile=/etc/creapp/creapp.env \
+    "$RELEASE/.venv/bin/python" "manage.py" "$@"
+}
+
+as_app check --deploy                              # sin silenciar warnings
+as_app migrate --plan                              # solo muestra el plan
+as_app migrate --noinput                           # requiere backup y ventana
+as_app collectstatic --noinput
 ```
 
-### Paso 5: Configurar el servicio Systemd (`/etc/systemd/system/creapp.service`)
-Cree el servicio para que Gunicorn arranque automáticamente, siguiendo las directivas de [integración de Gunicorn con Systemd](https://docs.gunicorn.org/en/stable/deploy.html#systemd):
+### Paso 5 — Servicio systemd
+
+`/etc/systemd/system/creapp.service`:
+
 ```ini
 [Unit]
 Description=CREApp Django Service
@@ -144,54 +160,53 @@ After=network.target postgresql.service
 [Service]
 Type=simple
 User=creapp
-Group=www-data
-WorkingDirectory=/srv/creapp/backend
+Group=creapp
+SupplementaryGroups=www-data
+WorkingDirectory=/srv/creapp/current/backend
 EnvironmentFile=/etc/creapp/creapp.env
-ExecStart=/srv/creapp/.venv/bin/gunicorn \
-    --workers 3 \
-    --bind 127.0.0.1:8000 \
-    config.wsgi:application
+UMask=0027
+ExecStart=/srv/creapp/current/.venv/bin/gunicorn \
+    --workers 3 --bind 127.0.0.1:8000 config.wsgi:application
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
-Active e inicie el servicio:
+
 ```sh
 sudo systemctl daemon-reload
-sudo systemctl enable --now creapp
 ```
 
-El código y `frontend/dist` deben ser legibles y sus directorios padre atravesables por el proceso. En este ejemplo `creapp` usa grupo `www-data`, que permite a Nginx leer el checkout; el usuario del servicio necesita escribir en `backend/staticfiles` para `collectstatic`. Revise propietario, grupo y modos efectivos después de clonar/build.
+No inicie el servicio todavía: `current` se publica en el paso 7.
 
-### Paso 6: Configurar Nginx (`/etc/nginx/sites-available/creapp`)
-Cree la configuración del proxy inverso basada en el módulo [`ngx_http_proxy_module`](https://nginx.org/en/docs/http/ngx_http_proxy_module.html) y las recomendaciones para [servidores HTTPS seguros](https://nginx.org/en/docs/http/configuring_https_servers.html):
+### Paso 6 — Nginx
+
+`/etc/nginx/sites-available/creapp`:
+
 ```nginx
 server {
     listen 80;
-    server_name creapp.institucion.edu.ar;
+    server_name <FQDN_REAL>;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name creapp.institucion.edu.ar;
-
-    # Reemplace por las rutas a un certificado real y válido para este FQDN.
-    ssl_certificate     /etc/letsencrypt/live/creapp.institucion.edu.ar/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/creapp.institucion.edu.ar/privkey.pem;
-
+    server_name <FQDN_REAL>;
+    ssl_certificate     <RUTA_FULLCHAIN_PEM>;
+    ssl_certificate_key <RUTA_PRIVKEY_PEM>;
     client_max_body_size 25M;
 
-    # 1. Archivos estáticos de Django
+    # Evita que el fallback SPA devuelva HTML en /api.
+    location = /api { return 308 /api/; }
+
     location ^~ /api/static/ {
-        alias /srv/creapp/backend/staticfiles/;
+        alias /srv/creapp/current/backend/staticfiles/;
         expires 30d;
         access_log off;
     }
 
-    # 2. Rutas dinámicas hacia Django (Gunicorn)
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
@@ -203,179 +218,165 @@ server {
     location = /healthz {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # 3. Interfaz de usuario (React SPA)
     location / {
-        root /srv/creapp/frontend/dist;
+        root /srv/creapp/current/frontend/dist;
         index index.html;
         try_files $uri $uri/ /index.html;
     }
 }
 ```
-El certificado real debe existir antes de cargar esta configuración. Gunicorn escucha únicamente en loopback; no exponga 8000. No configure `PROXY_ACCESS_SECRET` ni envíe `X-Proxy-Access-Secret` salvo que un proxy lo requiera y esté configurado intencionalmente.
 
-Habilite el sitio y valide su sintaxis antes de recargar Nginx:
+Nginx debe sobrescribir `X-Forwarded-Proto`: Django confía en esa cabecera. Gunicorn y PostgreSQL no se exponen en el firewall.
+
+### Paso 7 — Publicar y verificar
+
+Solo después de compilar, migrar y recolectar estáticos se publica el release:
+
 ```sh
-sudo ln -sf /etc/nginx/sites-available/creapp /etc/nginx/sites-enabled/
+set -eu
+RELEASE="/srv/creapp/releases/$SHA_APROBADO"
+test -d "$RELEASE/backend/staticfiles"
+test ! -e /srv/creapp/current.next
+sudo ln -s "$RELEASE" /srv/creapp/current.next
+sudo mv -Tf /srv/creapp/current.next /srv/creapp/current
 sudo nginx -t && sudo systemctl reload nginx
+sudo systemctl enable --now creapp     # primera instalación
+# sudo systemctl restart creapp      # en actualizaciones
 ```
-*(Para la obtención y renovación automática de certificados TLS gratuitos, se sugiere utilizar [Certbot / EFF](https://certbot.eff.org/)).*
 
-### Paso 7: Pruebas smoke
-
-Con DNS y TLS reales listos, no se conforme solo con un status 200. Compruebe cuerpo y `Content-Type`; el ejemplo JSON usa una ruta existente (`/api/auth/csrf`) que no requiere sesión:
+Pruebas de humo con el dominio real:
 
 ```sh
-curl -fsS -D - https://creapp.institucion.edu.ar/healthz
-# Debe incluir Content-Type: text/plain y cuerpo `ok`.
-curl -fsS -D - https://creapp.institucion.edu.ar/api/auth/csrf
-# Debe devolver JSON (Content-Type application/json), no el index.html de la SPA.
-# Sustituya por una ruta real de JS/CSS listada en frontend/dist/index.html.
-curl -fsS -D - 'https://creapp.institucion.edu.ar/api/static/assets/PEGAR_NOMBRE_REAL.js'
-# Debe devolver JavaScript/CSS con su Content-Type correcto.
-curl -fsS -D - https://creapp.institucion.edu.ar/ruta-spa-profunda
-# Debe devolver text/html de la SPA, igual que /.
+curl -fsS -D - 'https://<FQDN_REAL>/healthz'                 # 200 text/plain, cuerpo ok
+curl -fsS -D - 'https://<FQDN_REAL>/api/auth/csrf'          # JSON, no HTML
+curl -fsS -D - 'https://<FQDN_REAL>/api'                    # 308 hacia /api/
+curl -fsS -D - 'https://<FQDN_REAL>/ruta-spa-profunda'      # HTML de la SPA
 ```
 
-Complete también una prueba manual de login y de `/api/sadmin-creapp-panel/` (incluida página de login/admin); una API desconocida puede caer en el fallback SPA y contestar HTML 200. `/healthz` responde `ok`, pero no verifica conectividad con PostgreSQL.
+Pruebe además el login y `/api/sadmin-creapp-panel/`. `/healthz` no consulta PostgreSQL.
 
----
+Para revertir, apunte el symlink al release anterior y reinicie, solo si la base sigue siendo compatible. El código no se revierte junto con las migraciones.
 
-## 4. Respaldos y Restauración
+## 3. Respaldos y restauración
 
-### Crear una copia de seguridad (Backup)
-Para respaldar la base de datos a un archivo comprimido mediante el comando oficial [`pg_dump`](https://www.postgresql.org/docs/current/app-pgdump.html):
+Cree una cuenta y un `.pgpass` protegidos para que la contraseña no aparezca en comandos ni logs.
+
 ```sh
-umask 077
-pg_dump -h 127.0.0.1 -U creapp_usr -F c -f /var/backups/creapp_$(date +%F).dump creapp_db
+if ! getent group creapp-backup >/dev/null; then sudo groupadd --system creapp-backup; fi
+id -u creapp-backup >/dev/null 2>&1 || sudo useradd --system --gid creapp-backup \
+  --create-home --home-dir /var/lib/creapp-backup --shell /usr/sbin/nologin creapp-backup
+sudo install -d -o creapp-backup -g creapp-backup -m 0700 /var/backups/creapp
+sudo install -o creapp-backup -g creapp-backup -m 0600 /dev/null /var/lib/creapp-backup/.pgpass
+sudoedit /var/lib/creapp-backup/.pgpass    # chmod 0600
 ```
-> **Automatización (opcional):** Puede programar la copia diaria a las 02:00 AM editando las tareas del usuario mediante [cron (`crontab -e`)](https://man7.org/linux/man-pages/man5/crontab.5.html):
-> ```sh
-> 0 2 * * * umask 077; pg_dump -h 127.0.0.1 -U creapp_usr -F c -f /var/backups/creapp_$(date +\%F).dump creapp_db
-> ```
 
-### Restaurar una copia de seguridad (Restore)
-No restaure directamente sobre una base viva ni use `pg_restore --clean` como rollback. Haga backup del destino, restaure primero en una DB aislada, compruebe el código de salida, integridad, ownership y funcionamiento de la aplicación; acuerde una ventana y plan explícito antes de sustituir datos de producción. Un restore puede reemplazar o perder datos.
+```text
+127.0.0.1:5432:creapp_db:creapp_usr:<PASSWORD_REAL>
+127.0.0.1:5432:creapp_restore_test:creapp_usr:<PASSWORD_REAL>
+```
 
-Ejemplo de prueba en una base aislada previamente creada:
+```sh
+sudo -u creapp-backup env PGPASSFILE=/var/lib/creapp-backup/.pgpass \
+  /bin/sh -c 'umask 077; exec /usr/bin/pg_dump -h 127.0.0.1 -U creapp_usr -F c \
+  -f "/var/backups/creapp/creapp_$(date +%F_%H%M%S).dump" creapp_db'
+```
+
+Para restaurar, primero haga un ensayo en una base vacía y aislada. Nunca restaure sobre la base viva ni use `pg_restore --clean` como rollback.
+
 ```sh
 sudo -u postgres createdb -O creapp_usr creapp_restore_test
-pg_restore -h 127.0.0.1 -U creapp_usr -d creapp_restore_test /var/backups/creapp_YYYY-MM-DD.dump
+sudo -u creapp-backup env PGPASSFILE=/var/lib/creapp-backup/.pgpass \
+  pg_restore --exit-on-error --single-transaction -h 127.0.0.1 \
+  -U creapp_usr -d creapp_restore_test /var/backups/creapp/creapp_<FECHA>.dump
 ```
 
----
+La base de ensayo necesita su propia regla en `pg_hba.conf`, que se retira al terminar. Compare recuentos y datos representativos con el origen.
 
-## 5. Despliegue en Cloud Provider (Microsoft Azure)
+## 4. Despliegue en Azure
 
-Para entornos donde la institución requiera alojar CREApp en la nube de Microsoft Azure:
+![Flujos de despliegue en Azure](diagrams/deployment-workflows.svg)
 
-![Flujos de despliegue en Azure y GitHub Actions](diagrams/deployment-workflows.svg)
+### Paso 1 — PostgreSQL Flexible Server
 
-### Paso 1: Aprovisionar Azure Database for PostgreSQL Flexible Server
-1. Cree la instancia de [PostgreSQL Flexible Server](https://learn.microsoft.com/azure/postgresql/flexible-server/overview) en Azure con autenticación por contraseña.
-2. **Configuración de red y cortafuegos:**
-   * **Firewall por IPs de salida:** Debe autorizar en el cortafuegos de PostgreSQL **todas** las direcciones listadas en las propiedades del App Service (tanto `Outbound IP addresses` como `Additional outbound IP addresses`), según las [reglas de red de Flexible Server](https://learn.microsoft.com/azure/postgresql/flexible-server/concepts-networking). Las conexiones salientes de App Service toman una IP aleatoria del pool asignado en tiempo de ejecución; autorizar solo una causará fallos de conexión intermitentes.
-   * **Seguridad de red:** No active la casilla *"Permitir acceso público desde cualquier servicio de Azure dentro de Azure"*, ya que no está restringida a su suscripción sino abierta a cualquier tenant de Azure. Emplee reglas de IP exactas o [Private Endpoint](https://learn.microsoft.com/azure/postgresql/flexible-server/concepts-networking-private).
-   * **Opción VNet / Private Endpoint:** Si la base de datos se ubica detrás de un Private Endpoint, el App Service requiere [VNet Integration](https://learn.microsoft.com/azure/app-service/overview-vnet-integration) mediante una subred delegada dedicada.
+1. Cree el servidor con autenticación por contraseña.
+2. En el firewall autorice **todas** las direcciones de `Outbound IP addresses` y `Additional outbound IP addresses` del App Service. Autorizar solo una produce fallos intermitentes.
+3. No active "permitir acceso público desde cualquier servicio de Azure": abre el acceso a cualquier tenant.
+4. Con Private Endpoint, el App Service necesita VNet Integration en su propia subred y DNS privado que resuelva el nombre del servidor. Son dos recursos de red distintos.
 
-### Paso 2: Crear el recurso Azure App Service
-Cree un **App Service (Linux)** seleccionando runtime **Python 3.13**, conforme a la [guía de configuración de Python en App Service](https://learn.microsoft.com/azure/app-service/configure-language-python) (Plan B1 o superior recomendado para producción).
+### Paso 2 — App Service
 
-### Paso 3: Configurar variables en Application Settings
-En la sección *Configuración -> Variables de entorno* del App Service en el portal de Azure, defina:
+App Service (Linux) con runtime Python 3.13 y un plan acorde a la carga.
+
+### Paso 3 — Application Settings
+
 ```ini
 DEBUG=False
-SECRET_KEY=clave_aleatoria_fuerte_de_50_caracteres
-ALLOWED_HOSTS=<nombre-app>.azurewebsites.net
+SECRET_KEY=<secreto>
+ALLOWED_HOSTS=<FQDN_APP_SERVICE>
 POSTGRES_DB=creapp_db
 POSTGRES_USER=creapp_usr
-POSTGRES_PASSWORD=contraseña_segura
-POSTGRES_HOST=<servidor-db>.postgres.database.azure.com
+POSTGRES_PASSWORD=<secreto>
+POSTGRES_HOST=<FQDN_POSTGRESQL>
 POSTGRES_PORT=5432
-CSRF_TRUSTED_ORIGINS=https://<nombre-app>.azurewebsites.net
-CORS_ALLOWED_ORIGINS=https://<nombre-app>.azurewebsites.net
+CSRF_TRUSTED_ORIGINS=https://<FQDN_APP_SERVICE>
 CSRF_COOKIE_SECURE=True
 SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SAMESITE=Lax
+SESSION_COOKIE_SAMESITE=Lax
 SECURE_SSL_REDIRECT=True
-VITE_API_URL=/api
-VITE_STATIC_BASE=/api/static/
 ```
-> **Importante (Reinicio manual):** Los cambios en las variables de entorno de App Service no recargan el proceso Django en caliente. Es **indispensable pulsar el botón Reiniciar (*Restart*) en el portal de Azure** para que las nuevas variables surtan efecto.
 
-### Paso 4: Configurar el comando de inicio (*Startup Command*)
-En *Configuración general* del App Service, configure:
+Los cambios de variables no recargan el proceso: pulse **Restart** en el portal. Las variables `VITE_*` son de compilación, no de runtime; `deploy.yml` compila con `/api` y `/api/static/`.
+
+### Paso 4 — Startup Command
+
 ```sh
 gunicorn --bind=0.0.0.0:8000 --timeout 600 --chdir backend config.wsgi:application
 ```
 
-### Paso 5: Despliegue automatizado con GitHub Actions
-1. En el repositorio GitHub, guarde el perfil de publicación descargado de Azure en el secreto `AZURE_WEBAPP_PUBLISH_PROFILE`.
-2. El workflow `.github/workflows/deploy.yml` compila la SPA con Node 22 (`VITE_API_URL=/api`, `VITE_STATIC_BASE=/api/static/`), instala requirements en Python 3.13, ejecuta `collectstatic` y publica el artefacto automáticamente al hacer push a `main` o `azure`, o mediante ejecución manual (*workflow_dispatch*). Vite vars son build-time, no runtime. Este workflow no ejecuta tests ni migraciones y `check --deploy` es no bloqueante (`|| true`); un run verde no prueba migraciones ni aplicación. `main` también activa `main_cre-app-api.yml` para la misma App Service y puede ocasionar un segundo despliegue. Revise cuál quedó activo y el artefacto final.
+### Paso 5 — GitHub Actions
 
-### Paso 6: Verificación y arranque en frío (*Cold Start*)
-El arranque inicial (*cold start*) de App Service puede demorar entre **30 y 90 segundos**. Configure sus sondas de monitoreo con un timeout no menor a 90 segundos antes de validar el endpoint `https://<nombre-app>.azurewebsites.net/healthz`.
+1. `deploy.yml` requiere `AZURE_WEBAPP_PUBLISH_PROFILE` y se activa con push a sus ramas de filtro o manualmente. Compila el frontend, ejecuta `collectstatic` y publica.
+2. `main_cre-app-api.yml` despliega a la misma aplicación con otro paquete. Si ambas ramas de filtro se activan en un mismo push, se despliega dos veces. Use una sola rama de release.
+3. El workflow de Static Web Apps tiene el push desactivado: solo previsualiza pull requests.
 
----
+Los workflows no ejecutan pruebas ni migraciones, y `check --deploy` es no bloqueante. Un workflow en verde no acredita salud, migraciones ni base de datos.
 
-## 6. Solución Rápida de Problemas Comunes
+### Paso 6 — Verificación
 
-Las soluciones atienden a los códigos de estado y directivas de la especificación [RFC 9110 (HTTP Semantics)](https://www.rfc-editor.org/rfc/rfc9110.html):
+El arranque en frío puede tardar 30 a 90 segundos: configure los tiempos de espera de monitoreo en 90 s o más. Valide `/healthz` y una ruta de API JSON.
 
-### 502 Bad Gateway
-* **Causa habitual:** Gunicorn está detenido o Nginx no puede conectar a `127.0.0.1:8000`.
-* **Solución inmediata:**
-  1. Verifique el estado del servicio: `sudo systemctl status creapp`
-  2. Compruebe los logs de error recientes: `sudo journalctl -u creapp -n 30`
-  3. Compruebe que Gunicorn escucha en loopback con `sudo ss -ltnp | grep 127.0.0.1:8000` y que Nginx apunta al mismo host/puerto.
+## 5. Problemas frecuentes
 
-### 400 Bad Request
-* **Causa habitual:** El nombre de dominio o IP solicitada no está registrado en `ALLOWED_HOSTS`.
-* **Solución inmediata:** Edite `/etc/creapp/creapp.env` y agregue el dominio o IP a `ALLOWED_HOSTS`. Luego reinicie: `sudo systemctl restart creapp`.
+| Síntoma | Causa probable | Qué revisar |
+|---|---|---|
+| 502 Bad Gateway | Gunicorn detenido | `systemctl status creapp`, `journalctl -u creapp -n 30`, `ss -ltnp \| grep 8000` |
+| 400 Bad Request | Host no permitido | `ALLOWED_HOSTS` en `/etc/creapp/creapp.env`, luego reiniciar |
+| 403 CSRF | Origen no confiable | `CSRF_TRUSTED_ORIGINS` con el dominio exacto y acceso por HTTPS |
+| Error de conexión a PostgreSQL | Credenciales o servicio | `systemctl status postgresql`, `psql -h 127.0.0.1 -U creapp_usr -d creapp_db` |
+| 404 de CSS o JS | Faltó el build o `collectstatic` | `readlink -f /srv/creapp/current`, manifest, `alias` de `/api/static/` |
+| HTML en una ruta `/api` | Fallback SPA | Regla `location = /api` presente y `proxy_pass` correcto |
 
-### 403 Forbidden (CSRF verification failed)
-* **Causa habitual:** El origen de la petición no coincide con `CSRF_TRUSTED_ORIGINS`.
-* **Solución inmediata:** Asegúrese de acceder mediante `https://` y de que su dominio exacto esté configurado en `CSRF_TRUSTED_ORIGINS=https://tu-dominio` en `/etc/creapp/creapp.env`.
+## 6. Qué se comprobó
 
-### Error de conexión a PostgreSQL
-* **Causa habitual:** Credenciales incorrectas, base de datos inexistente o servicio PostgreSQL inactivo.
-* **Solución inmediata:**
-  1. Verifique que PostgreSQL esté corriendo: `sudo systemctl status postgresql`
-  2. Pruebe la conexión manual interactiva: `psql -h 127.0.0.1 -U creapp_usr -d creapp_db`
+El harness de aceptación ejecutó el recorrido completo en un entorno aislado: Node 22, Python 3.13, PostgreSQL 17, Gunicorn y Nginx con TLS de prueba. Pasaron 54 pruebas frontend, 78 pruebas Django, las migraciones desde base vacía, la sesión con CSRF, el panel de administración, los estáticos y un ciclo de respaldo y restauración.
 
-### 404 en imágenes / CSS / Estáticos
-* **Causa habitual:** Falta el build Vite previo a `collectstatic`, no se generó `backend/staticfiles`, o Nginx alias no coincide con `STATIC_ROOT=/srv/creapp/backend/staticfiles` y `STATIC_URL=/api/static/`.
-* **Solución inmediata:** Construya primero la SPA con `npm ci` y `VITE_API_URL=/api VITE_STATIC_BASE=/api/static/ npm run build` desde `/srv/creapp/frontend`; luego ejecute `collectstatic` con `EnvironmentFile` y `WorkingDirectory=/srv/creapp/backend` según los pasos anteriores. Confirme permisos de lectura de Nginx y `location ^~ /api/static/`.
+Ese recorrido **no** cubre Azure, una VM con systemd, DNS o certificados públicos, PostgreSQL remoto ni la política real de cookies del navegador. Repita estas verificaciones contra el destino que vaya a usar. Los detalles están en [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
 
----
+## 7. Referencias
 
-## 7. Documentación Oficial y Fuentes de Referencia
-
-Para consultar en profundidad las especificaciones, parámetros y directivas oficiales:
-
-* **Django:**
-  * [Lista de comprobación para despliegue en producción](https://docs.djangoproject.com/es/6.0/howto/deployment/checklist/)
-  * [Gestión y publicación de archivos estáticos (staticfiles)](https://docs.djangoproject.com/es/6.0/howto/static-files/)
-  * [Referencia completa de configuración (settings)](https://docs.djangoproject.com/es/6.0/ref/settings/)
-* **Gunicorn:**
-  * [Guía de configuración y modelo de concurrencia](https://docs.gunicorn.org/en/stable/configure.html)
-  * [Despliegue e integración con Systemd](https://docs.gunicorn.org/en/stable/deploy.html#systemd)
-* **Nginx:**
-  * [Módulo de proxy inverso HTTP (ngx\_http\_proxy\_module)](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
-  * [Configuración de servidores seguros HTTPS con SSL/TLS](https://nginx.org/en/docs/http/configuring_https_servers.html)
-* **PostgreSQL:**
-  * [Copias de seguridad lógicas (pg\_dump y pg\_restore)](https://www.postgresql.org/docs/current/backup.html)
-  * [Control de acceso y autenticación en pg\_hba.conf](https://www.postgresql.org/docs/current/auth-pg-hba-conf.html)
-  * [Gestión de roles y privilegios de usuario](https://www.postgresql.org/docs/current/user-manag.html)
-* **Microsoft Azure:**
-  * [Aprovisionamiento y conectividad en Azure PostgreSQL Flexible Server](https://learn.microsoft.com/azure/postgresql/flexible-server/)
-  * [Configuración de aplicaciones Python en Azure App Service Linux](https://learn.microsoft.com/azure/app-service/configure-language-python)
-  * [Integración de red virtual (VNet Integration) en App Service](https://learn.microsoft.com/azure/app-service/overview-vnet-integration)
-* **Systemd y Linux:**
-  * [Especificación de unidades de servicio (systemd.service)](https://www.freedesktop.org/software/systemd/man/systemd.service.html)
-  * [Control y filtrado de bitácoras del sistema con journalctl](https://man7.org/linux/man-pages/man1/journalctl.1.html)
-* **Estándares y Protocolos Web:**
-  * [RFC 9110: HTTP Semantics (Códigos de estado y cabeceras de transporte)](https://www.rfc-editor.org/rfc/rfc9110.html)
+- [Django: lista de comprobación para producción](https://docs.djangoproject.com/es/6.0/howto/deployment/checklist/)
+- [Django: archivos estáticos](https://docs.djangoproject.com/es/6.0/howto/static-files/)
+- [Django: referencia de settings](https://docs.djangoproject.com/es/6.0/ref/settings/)
+- [Gunicorn: despliegue con systemd](https://docs.gunicorn.org/en/stable/deploy.html#systemd)
+- [Nginx: módulo de proxy inverso](https://nginx.org/en/docs/http/ngx_http_proxy_module.html)
+- [Nginx: servidores HTTPS](https://nginx.org/en/docs/http/configuring_https_servers.html)
+- [PostgreSQL: pg_dump y pg_restore](https://www.postgresql.org/docs/current/backup.html)
+- [PostgreSQL: pg_hba.conf](https://www.postgresql.org/docs/current/auth-pg-hba-conf.html)
+- [Azure: Python en App Service](https://learn.microsoft.com/azure/app-service/configure-language-python)
+- [Azure: PostgreSQL Flexible Server](https://learn.microsoft.com/azure/postgresql/flexible-server/overview)
+- [Azure: VNet Integration](https://learn.microsoft.com/azure/app-service/overview-vnet-integration)
+- [systemd.service](https://www.freedesktop.org/software/systemd/man/systemd.service.html)
