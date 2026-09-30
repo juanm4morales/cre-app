@@ -1,34 +1,96 @@
 \documentclass[tikz,border=12pt]{standalone}
 \usepackage[utf8]{inputenc}\usepackage[T1]{fontenc}\usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,shadows.blur,shapes.geometric}
-\definecolor{greenFill}{HTML}{E8F5E9}\definecolor{greenStroke}{HTML}{43A047}
-\definecolor{coreFill}{HTML}{E1F5FE}\definecolor{coreStroke}{HTML}{0277BD}
-\definecolor{optFill}{HTML}{FCE4EC}\definecolor{optStroke}{HTML}{D81B60}
-\definecolor{memFill}{HTML}{FFF3E0}\definecolor{memStroke}{HTML}{EF8C00}
+\usetikzlibrary{arrows.meta,positioning,shadows.blur,shapes.geometric,fit,backgrounds}
+\definecolor{clientFill}{HTML}{E8F5E9}\definecolor{clientStroke}{HTML}{2E7D32}
+\definecolor{proxyFill}{HTML}{E1F5FE}\definecolor{proxyStroke}{HTML}{0277BD}
+\definecolor{appFill}{HTML}{EDE7F6}\definecolor{appStroke}{HTML}{512DA8}
+\definecolor{staticFill}{HTML}{FFF8E1}\definecolor{staticStroke}{HTML}{F57F17}
+\definecolor{dbFill}{HTML}{FFF3E0}\definecolor{dbStroke}{HTML}{E65100}
+\definecolor{secFill}{HTML}{FFEBEE}\definecolor{secStroke}{HTML}{C62828}
+\definecolor{boxBg}{HTML}{F8FAFC}\definecolor{boxStroke}{HTML}{94A3B8}
+\definecolor{CREBlue}{HTML}{075985}
+
 \begin{document}
 \begin{tikzpicture}[
   font=\sffamily\small,>={Stealth[length=3mm,width=2.2mm]},
-  client/.style={rectangle,rounded corners=3pt,draw=greenStroke,thick,fill=greenFill,minimum width=3.0cm,minimum height=1.0cm,align=center},
-  app/.style={rectangle,rounded corners=3pt,draw=coreStroke,thick,fill=coreFill,minimum width=3.6cm,minimum height=1.15cm,align=center},
-  net/.style={rectangle,rounded corners=3pt,draw=optStroke,thick,fill=optFill,minimum width=3.6cm,minimum height=1.15cm,align=center},
-  db/.style={cylinder,draw=memStroke,thick,aspect=0.3,shape border rotate=90,fill=memFill,minimum width=3.0cm,minimum height=1.5cm,align=center},
-  edge/.style={->,line width=.9pt,draw=black!70,shorten >=1.2pt,shorten <=1.2pt}, optional/.style={->,line width=.9pt,dashed,draw=optStroke,shorten >=1.2pt,shorten <=1.2pt}
+  clientNode/.style={rectangle,rounded corners=4pt,draw=clientStroke,thick,fill=clientFill,minimum width=2.8cm,minimum height=1.1cm,align=center},
+  proxyNode/.style={rectangle,rounded corners=4pt,draw=proxyStroke,thick,fill=proxyFill,minimum width=3.0cm,minimum height=1.3cm,align=center},
+  appNode/.style={rectangle,rounded corners=4pt,draw=appStroke,thick,fill=appFill,minimum width=3.4cm,minimum height=1.3cm,align=center},
+  staticNode/.style={rectangle,rounded corners=4pt,draw=staticStroke,thick,fill=staticFill,minimum width=3.4cm,minimum height=1.1cm,align=center},
+  dbNode/.style={cylinder,draw=dbStroke,thick,aspect=0.3,shape border rotate=90,fill=dbFill,minimum width=2.8cm,minimum height=1.4cm,align=center},
+  secNode/.style={rectangle,rounded corners=3pt,draw=secStroke,dashed,thick,fill=secFill,minimum width=2.8cm,minimum height=1.0cm,align=center},
+  edge/.style={->,line width=1.0pt,draw=black!75,shorten >=1.5pt,shorten <=1.5pt},
+  socketEdge/.style={->,line width=1.1pt,draw=appStroke,shorten >=1.5pt,shorten <=1.5pt},
+  staticEdge/.style={->,line width=1.0pt,draw=staticStroke,shorten >=1.5pt,shorten <=1.5pt},
+  dbEdge/.style={->,line width=1.1pt,draw=dbStroke,shorten >=1.5pt,shorten <=1.5pt}
 ]
-% The two incoming web paths reach the same application; database networking is shown separately.
-\node[client] (same) at (0,1.7) {Navegador\\same-origin};
-\node[client] (swa) at (0,-1.5) {SWA\\preview split-origin};
-\node[app] (appservice) at (5,0) {Azure App Service\\Django + SPA};
-\node[net] (public) at (10,1.7) {Endpoint público\\Firewall: IPs de salida};
-\node[net] (vnet) at (10,-1.5) {Endpoint privado\\VNet, DNS y rutas};
-\node[db] (postgres) at (15,0) {Azure PostgreSQL\\Flexible Server};
-\draw[edge] (same.east) -| (appservice.north);
-\draw[optional] (swa.east) -| (appservice.south);
-\draw[edge] (appservice.east) -- ++(.6,0) |- (public.west);
-\draw[edge] (appservice.east) -- ++(.6,0) |- (vnet.west);
-\draw[edge] (public.east) -| (postgres.north);
-\draw[edge] (vnet.east) -| (postgres.south);
-\node[font=\scriptsize,text=black!70,align=left,anchor=west] at (0,-3.0)
- {La conectividad con PostgreSQL es independiente del origen del frontend.\\
-  El acceso público restringido y el acceso privado son alternativas de configuración.};
+
+% 1. Clientes
+\node[clientNode] (clients) at (0, 0) {
+  \textbf{Navegadores}\\
+  \footnotesize Intranet / Red LAN\\
+  \scriptsize (Docentes / Admin)
+};
+
+% 2. Proxy Inverso (Nginx)
+\node[proxyNode] (nginx) at (5.0, 0) {
+  \textbf{Nginx}\\
+  \footnotesize Proxy Inverso\\
+  \scriptsize Terminación TLS (HTTPS)\\
+  \scriptsize Puertos 80 / 443
+};
+
+% 3. Archivos Estáticos y SPA (Superior)
+\node[staticNode] (statics) at (11.0, 1.8) {
+  \textbf{Archivos Estáticos}\\
+  \scriptsize Frontend SPA (\texttt{dist/})\\
+  \scriptsize Django Assets (\texttt{staticfiles/})
+};
+
+% 4. Gunicorn WSGI (Inferior)
+\node[appNode] (gunicorn) at (11.0, -1.6) {
+  \textbf{Gunicorn (Django)}\\
+  \footnotesize Servidor WSGI\\
+  \scriptsize API REST + Lógica CREApp
+};
+
+% 5. PostgreSQL Local
+\node[dbNode] (postgres) at (16.6, -1.6) {
+  \textbf{PostgreSQL}\\
+  \footnotesize Base de Datos Local\\
+  \scriptsize Puerto 5432 no expuesto
+};
+
+% 6. Respaldo (Superior derecho)
+\node[secNode] (backup) at (16.6, 1.8) {
+  \textbf{Copia de Respaldo}\\
+  \scriptsize \texttt{pg\_dump} programado\\
+  \scriptsize Resguardo local / NAS
+};
+
+% Flujos de conexión con espaciado amplio y etiquetas 'midway'
+% Clientes -> Nginx
+\draw[edge] (clients) -- node[above=2pt,midway,font=\scriptsize] {HTTPS (443)} (nginx);
+
+% Nginx -> Estáticos (salida superior)
+\draw[staticEdge] ([yshift=8pt]nginx.east) -- ++(1.8, 0) node[above=2pt,midway,font=\scriptsize,text=staticStroke] {Estáticos} |- (statics.west);
+
+% Nginx -> Gunicorn (salida inferior hacia socket UNIX)
+\draw[socketEdge] ([yshift=-8pt]nginx.east) -- ++(1.8, 0) node[below=2pt,midway,font=\scriptsize,text=appStroke] {Socket UNIX} |- (gunicorn.west);
+
+% Gunicorn -> PostgreSQL
+\draw[dbEdge] (gunicorn) -- node[above=2pt,midway,font=\scriptsize,text=dbStroke] {TCP local} (postgres);
+
+% PostgreSQL -> Backup
+\draw[edge,dashed] (postgres) -- node[right=3pt,midway,font=\scriptsize] {pg\_dump} (backup);
+
+% Caja contenedora del Servidor Local
+\begin{scope}[on background layer]
+  \node[draw=boxStroke,thick,dashed,fill=boxBg,rounded corners=6pt,
+        fit={(nginx) (statics) (gunicorn) (postgres) (backup)},
+        inner xsep=16pt, inner ysep=16pt,
+        label={[anchor=north west,font=\bfseries\small,text=CREBlue,xshift=12pt,yshift=-6pt]north west:Servidor Local / Máquina Virtual (Linux)}] (serverBox) {};
+\end{scope}
+
 \end{tikzpicture}
 \end{document}

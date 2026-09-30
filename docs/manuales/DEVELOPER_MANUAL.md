@@ -1,34 +1,45 @@
-# Manual de desarrollo y mantenimiento de CREApp
+# Manual de Arquitectura y Desarrollo de CREApp
+## Especificación de dominio, contratos de API y procedimientos técnicos
 
-Este manual está dirigido a desarrolladores que se incorporan a CREApp. Describe la arquitectura, las reglas del dominio, los contratos de la API y los procedimientos para preparar el entorno, verificar cambios y mantener la aplicación.
+**Autor:** Juan Martín Morales  
+**Repositorio:** [https://github.com/juanm4morales/cre-app](https://github.com/juanm4morales/cre-app)  
+**Versión:** 2.0 (Desarrollo y Mantenimiento)
 
-La referencia técnica es la rama `azure`, commit `7180921`. Al trabajar con otro commit, comprobar los cambios de rutas, migraciones y contratos antes de aplicar las instrucciones. Los resultados de pruebas se identifican expresamente; los demás comandos son procedimientos para ejecutar en el entorno indicado.
+Este manual establece la arquitectura técnica, las reglas de negocio del dominio académico y de planificación, los contratos de la API REST y las directivas de desarrollo para el sistema **CREApp**.
 
-Para entornos, configuración segura, Nginx/Gunicorn, Azure, backup/restore y operaciones de despliegue, consultar el [Manual de despliegue](DEPLOYMENT_MANUAL.md).
+Para especificaciones de infraestructura, aprovisionamiento de PostgreSQL, configuración de Nginx/Gunicorn, respaldos y procedimientos de despliegue on-premises, consultar el [Manual Operativo de Despliegue y Administración](DEPLOYMENT_MANUAL.md).
 
 ## Modelo de datos y flujo HTTP
 
-El modelo relaciona el catálogo académico con los programas, sus unidades y las actividades de planificación. La figura muestra las relaciones principales: las flechas van desde una entidad a los registros que la referencian; las líneas discontinuas indican asociaciones de muchos a muchos (M:N). El acceso docente depende del espacio curricular asignado y de la vigencia de la asignación. Las reglas y restricciones de cada entidad se detallan en la sección de dominio.
+El modelo relaciona el catálogo institucional con los programas académicos, sus unidades temáticas y las actividades de planificación docente. La figura representa las relaciones principales entre entidades: las flechas van desde cada entidad hacia los registros dependientes; las líneas discontinuas indican relaciones de muchos a muchos ($M:N$). El acceso docente se encuentra estrictamente delimitado por el espacio curricular asignado y la vigencia temporal de dicha asignación.
 
 ![Modelo académico y de planificación de CREApp](diagrams/domain.svg)
 
-En el despliegue same-origin, el navegador accede a la SPA y a Django mediante un mismo origen. La API, el panel de administración y los archivos estáticos tienen rutas distintas; el resto de las rutas puede devolver la plantilla de la SPA.
+En el despliegue de mismo origen (*same-origin*), el navegador interactúa tanto con la SPA como con la API de Django a través del mismo dominio. El proxy inverso Nginx (o el servidor WSGI) canaliza las rutas dinámicas hacia la API y el panel de administración, y entrega los archivos estáticos y la plantilla de la SPA para las restantes rutas:
 
 ![Rutas HTTP same-origin de CREApp](diagrams/http-routing.svg)
 
-## Mapa rápido del repositorio
+## Estructura del repositorio
 
-| Ruta | Responsabilidad |
+| Directorio | Responsabilidad arquitectónica |
 |---|---|
-| `backend/config/` | Settings, URL raíz, URL de API, middleware, WSGI y ASGI. |
-| `backend/accounts/` | Perfil y rol de usuario, autenticación por sesión, permisos API y gestión de docentes. |
-| `backend/academics/` | Configuración CRE y catálogo académico: unidad, carrera, plan, espacio y competencia. Incluye importación XLSX. |
-| `backend/planning/` | Asignaciones de docentes, programas, unidades, agenda/calendario y actividades IP/TA. Incluye servicios de calendario, importación de tipos y tests de flujo. |
-| `frontend/src/App.tsx` | Mapa de rutas SPA y carga lazy de páginas. |
-| `frontend/src/contexts/`, `services/`, `hooks/` | Autenticación cliente, Axios/CSRF, selección docente, refresh y tema. |
-| `frontend/src/pages/admin/`, `pages/docente/` | Páginas y flujos por rol. |
-| `frontend/src/components/` | Layout, CRUD administrativo, formularios/calendario, tablas y componentes comunes. |
-| `docs/API.md` | Documento heredado con rutas y contratos desactualizados. Para cambios, contrastar el código y las tablas de API de este manual. |
+| `backend/config/` | Configuración global (`settings.py`), enrutamiento raíz (`urls.py`), enrutamiento de API (`api_urls.py`), middlewares y puntos de entrada WSGI/ASGI. |
+| `backend/accounts/` | Modelo de usuario, perfil (`UserProfile`), roles institucionales, autenticación por sesión, permisos de API y gestión de docentes. |
+| `backend/academics/` | Configuración de créditos (CRE) y catálogo académico: unidades académicas, carreras, planes de estudio, espacios curriculares y competencias. Incluye comandos de importación XLSX. |
+| `backend/planning/` | Asignaciones docentes, programas, unidades temáticas, agenda semanal, calendario y actividades (IP/TA). Servicios de generación de calendario y pruebas de integración. |
+| `frontend/src/App.tsx` | Enrutamiento de la SPA y carga diferida (*lazy loading*) de componentes de página. |
+| `frontend/src/contexts/`, `services/`, `hooks/` | Estado de autenticación en cliente, cliente Axios centralizado, manejo de token CSRF, selección de espacio curricular y temas visuales. |
+| `frontend/src/pages/admin/`, `pages/docente/` | Vistas organizadas por rol de usuario (Administrador y Docente). |
+| `frontend/src/components/` | Componentes de presentación, formularios, tablas, diálogos de confirmación y calendario de planificación. |
+
+## Estrategia de ramas y flujo de trabajo en Git
+
+El repositorio organiza el ciclo de vida del código mediante las siguientes ramas principales:
+
+* **`azure` (Rama Canónica de Producto y Despliegue):** Es la rama principal de referencia técnica para el modelo same-origin (`/api/static/`, `/api/sadmin-creapp-panel/`). Todo desarrollo de nuevas funcionalidades, corrección de errores o cambios de modelo debe integrarse primero en `azure`.
+* **`azure-same-origin` (Variante de Despliegue):** Es una variante técnica derivada de `azure`. La divergencia intencional respecto a `azure` se restringe estrictamente a configuraciones de enrutamiento y despliegue (`backend/config/settings.py`, `backend/config/urls.py`, `frontend/src/App.tsx`, `frontend/vite.config.js`). Nunca debe utilizarse como una segunda rama de producto ni contener lógica de dominio independiente: las modificaciones compartidas deben aterrizar primero en `azure` y luego sincronizarse hacia adelante (*sync forward*).
+* **`main`, `dev` y `frontend-modernization` (contexto histórico):** ramas de etapas anteriores del desarrollo; no son ramas de producto canónicas ni la referencia para nuevos cambios compartidos. En particular, no asumir que sus workflows, rutas o dependencias reflejan el estado actual de `azure`.
+* **`docs/developer-handbook`:** rama dedicada únicamente a la documentación técnica y sus fuentes/diagramas. No es una rama de producto ni de despliegue.
 
 ---
 
@@ -36,34 +47,34 @@ En el despliegue same-origin, el navegador accede a la SPA y a Django mediante u
 
 ## 1. Tecnologías, dependencias y entorno local
 
-El workflow de App Service usa Python 3.13 y Node 22. `runtime.txt` declara `python-3.13.0`; las dependencias Python están fijadas en `requirements.txt`. `frontend/package.json` declara rangos y `frontend/package-lock.json` fija la resolución del frontend; en esta revisión resuelve Vite 7.3.3 y TypeScript 5.9.3. Vite requiere Node `^20.19.0 || >=22.12.0`; los tests de Vitest admiten Node 20, 22 o 24+. Para reproducir el workflow, usa Node 22.12 o posterior de la línea 22. No inferir una versión Azure en producción de estos archivos: confirmar runtime del recurso.
+### Requisitos de plataforma
 
-### Stack tecnológico y responsabilidad de cada componente
+* **Backend:** Python 3.13 (versión usada por el workflow). Dependencias fijadas en `requirements.txt`.
+* **Motor de base de datos:** PostgreSQL 17 con codificación UTF-8 (versión del Compose de desarrollo).
+* **Frontend:** Node.js 22 LTS y npm (versiones de dependencias fijadas en `frontend/package-lock.json`).
 
-CREApp separa la interfaz de usuario de la lógica y la persistencia. El navegador ejecuta una aplicación de página única (SPA); Django recibe las solicitudes HTTP, comprueba la sesión y los permisos, valida los datos y consulta PostgreSQL mediante su ORM. La interfaz no accede directamente a la base de datos.
+### Componentes del stack tecnológico
 
-Las versiones Python proceden de `requirements.txt`; las versiones frontend de esta tabla son las resoluciones de `frontend/package-lock.json`, no los rangos de `package.json`.
+CREApp desacopla la interfaz de usuario de la lógica de negocio y de la persistencia relacional. El cliente ejecuta una aplicación de página única (SPA) en el navegador; Django atiende las peticiones HTTP, gestiona sesiones y tokens CSRF, evalúa permisos a nivel de vista y objeto, y consulta la base de datos PostgreSQL mediante su ORM.
 
-| Componente | Tecnología y función en CREApp |
-|---|---|
-| Lenguajes y ejecución | Python 3.13 para el backend; TypeScript 5.9.3 y JavaScript para la interfaz. Node 22 ejecuta las herramientas de desarrollo y compilación del workflow; no ejecuta la SPA en el navegador. |
-| Backend web | Django 6.0.2 aporta modelos, ORM, migraciones, sesiones, validación, middleware y administración. El código de dominio se organiza en `accounts`, `academics` y `planning`. |
-| API HTTP | Django REST Framework 3.16.1 aporta serializers, viewsets, routers y permisos. La API intercambia JSON bajo `/api`, usa autenticación por sesión y protege las operaciones autenticadas de escritura con CSRF. |
-| Persistencia | PostgreSQL guarda los datos relacionales; psycopg 3.2.13 es el controlador de conexión desde Python. Compose usa PostgreSQL 17 en desarrollo; la versión del servidor de producción debe comprobarse en el entorno. |
-| Interfaz | React 19.2.3 renderiza los componentes; React DOM los monta en el navegador. React Router DOM 7.13.0 resuelve las rutas de la SPA y sus páginas. |
-| Compilación frontend | Vite 7.3.3 proporciona el servidor de desarrollo y genera `frontend/dist`. TypeScript comprueba tipos con `npm run typecheck`; el comando de build solo invoca Vite, por lo que la comprobación de tipos debe ejecutarse por separado. |
-| Cliente HTTP y datos remotos | Axios 1.16.0 centraliza las llamadas a la API, el envío de cookies y la cabecera CSRF en `services/api.ts`. TanStack React Query 5.100.10 gestiona consultas, caché e invalidación en los consumidores que lo utilizan; su proveedor se configura en `main.tsx`. |
-| Formularios | React Hook Form 7.71.1 gestiona los formularios que lo usan; Zod 4.3.6 describe esquemas de validación mediante los resolvers. La validación del navegador complementa la validación del servidor. |
-| Presentación | La interfaz usa hojas CSS propias organizadas en `src/styles/`, importadas desde `App.css`; `index.css` define estilos generales. Lucide aporta iconos y Sonner notificaciones. Tailwind CSS 4.1.18 figura entre las dependencias, pero no debe asumirse que sustituye esas hojas CSS ni que existe un proceso de Tailwind por su sola instalación. |
-| Configuración e integración | python-dotenv 1.2.1 carga el archivo `.env` del backend. django-cors-headers 4.9.0 gestiona CORS según los orígenes configurados. openpyxl 3.1.5 lee los XLSX de los comandos de importación académica y de tipos de actividad. |
-| Servicio y estáticos | Gunicorn 23.0.0 está disponible como servidor WSGI y se usa en la receta de VM del manual de despliegue. WhiteNoise 6.11.0 está configurado como middleware y almacenamiento de estáticos con manifiesto y compresión. Las rutas actuales también sirven `/api/static/` mediante una vista explícita de Django; revisar ambas configuraciones al cambiar la publicación. |
-| Pruebas | El backend usa el ejecutor de pruebas de Django. El frontend usa Vitest 4.1.6, Testing Library React 16.3.2 y jsdom 29.1.1 para ejecutar pruebas de componentes en un entorno DOM simulado. |
+| Componente | Tecnología | Responsabilidad y características técnicas |
+|---|---|---|
+| Lenguajes de desarrollo | [Python 3.13](https://docs.python.org/3.13/) / [TypeScript 5.9](https://www.typescriptlang.org/docs/) | Python ejecuta la lógica de backend; TypeScript garantiza tipado estático en la capa de interfaz. |
+| Backend web | [Django 6.0](https://docs.djangoproject.com/es/6.0/) | Modelos relacionales, ORM, migraciones automáticas, sesiones del servidor, validación y panel de administración. |
+| API REST | [Django REST Framework 3.16](https://www.django-rest-framework.org/) | Serializadores, viewsets, enrutador automático y permisos de acceso basados en sesión y roles. |
+| Base de datos | [PostgreSQL 17](https://www.postgresql.org/docs/) | Persistencia relacional, integridad referencial y transacciones ACID. Controlador [`psycopg` 3.2](https://www.psycopg.org/psycopg3/docs/). |
+| Interfaz de usuario | [React 19](https://react.dev/) / [Vite 7](https://vite.dev/) | Renderizado de componentes mediante React DOM. Enrutamiento del lado del cliente con [React Router 7](https://reactrouter.com/). |
+| Cliente HTTP | Axios (rango declarado `^1.13.2`) | Peticiones HTTP centralizadas con inclusión de credenciales (`withCredentials: true`) y cabecera `X-CSRFToken`. La versión exacta resuelta se registra en `frontend/package-lock.json`. |
+| Caché en cliente | [TanStack Query 5.100](https://tanstack.com/query/latest) | Gestión de estado asíncrono, consultas, caché e invalidación controlada. |
+| Formularios y esquemas | [React Hook Form 7](https://react-hook-form.com/) / [Zod 4](https://zod.dev/) | Formularios controlados y validación declarativa de esquemas en el navegador. |
+| Servidor WSGI | [Gunicorn 23.0](https://docs.gunicorn.org/) | Servidor WSGI estándar para producción local y servidores dedicados. |
+| Archivos estáticos | [WhiteNoise 6.11](https://whitenoise.readthedocs.io/) | Almacenamiento y compresión de activos estáticos con hash de contenido. |
 
 En desarrollo, Vite sirve la interfaz y reenvía las solicitudes `/api` a Django. En el despliegue del mismo origen, GitHub Actions compila la SPA y Django sirve su entrada HTML desde `frontend/dist`. Las variables `VITE_*` se incorporan durante la compilación; las variables del backend se leen al iniciar el proceso. Esta diferencia explica por qué cambiar la URL de la API requiere recompilar el frontend, mientras que cambiar la configuración de Django requiere reiniciar el servicio.
 
 ### Preparación del entorno local
 
-Se necesita Python/venv/pip, Node/npm, PostgreSQL accesible (o Docker para desarrollo) y Git. Configurar `backend/.env` tomando `backend/.env.example` como referencia versionada. El ejemplo del frontend en `frontend/.env.example` no está versionado: el cliente usa `/api` si no se define `VITE_API_URL`. Django carga `backend/.env` desde `backend/config/settings.py`; no incluir secretos en Git.
+Se necesita Python 3.12 o 3.13 con venv/pip, Node.js 22 LTS/npm, Git y PostgreSQL, local o mediante el servicio `db` de `backend/docker-compose.yaml`. Ese Compose file inicia únicamente PostgreSQL; no inicia Django, Vite ni una aplicación completa. Copiar `backend/.env.example` a `backend/.env` y ajustar los valores. Al ejecutar Compose desde `backend/`, Compose toma sus variables de interpolación (`POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`) de `backend/.env`; Django, por separado, carga ese mismo archivo mediante `load_dotenv()` en `backend/config/settings.py`. Los valores `POSTGRES_HOST` y `POSTGRES_PORT` son leídos por Django; para la conexión local al puerto publicado, usar `localhost:5432`. No incluir secretos en Git. Vite usa `/api` si no se define `VITE_API_URL`; las variables `VITE_*` son configuración de compilación del frontend, no las proporciona Compose ni se cargan desde `backend/.env`.
 
 Desde la raíz del repositorio, iniciar un entorno de desarrollo:
 
@@ -74,7 +85,7 @@ python -m pip install -r requirements.txt
 cp backend/.env.example backend/.env
 ```
 
-Editar `backend/.env` con valores locales, crear la base indicada por `POSTGRES_DB` antes de migrar y mantener `POSTGRES_USER`/`POSTGRES_PASSWORD` iguales a los valores que Compose usa al inicializar el contenedor. Compose lee su `.env` desde `backend/`; ejecutarlo desde allí:
+Editar `backend/.env` con valores locales. La activación del venv pertenece a cada shell: actívelo en una terminal nueva también, usando `. .venv/bin/activate` desde la raíz o `. ../.venv/bin/activate` desde `backend/`. Iniciar PostgreSQL antes de ejecutar migraciones. En Compose, el servicio crea la base y usuario definidos por `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` al inicializar un volumen vacío; Django debe usar los mismos valores. Ejecutarlo desde `backend/` (Compose lee allí el `.env` para interpolar su configuración):
 
 ```sh
 cd backend
@@ -84,7 +95,7 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-En otra terminal, desde `frontend/`:
+En otra terminal, instalar e iniciar Vite desde `frontend/` (no hace falta activar el venv de Python):
 
 ```sh
 npm ci
@@ -93,19 +104,19 @@ npm run dev
 
 Frontend local: `http://localhost:5173`; Django local: `http://localhost:8000`; API local: `http://localhost:8000/api`. El cliente del navegador usa `/api` relativo al servidor Vite y el proxy local lo reenvía a Django. La alternativa directa configura `VITE_API_URL=http://localhost:8000/api`; la variable no se comparte automáticamente entre terminales. `runserver` es solo desarrollo. Alternativas de test y build están en la sección de pruebas.
 
-Compose publica PostgreSQL en el puerto local `5432` y conserva sus datos en el volumen `postgres-data`. Si ya se inicializó ese volumen, cambiar las variables de inicialización en `.env` no recrea usuarios, contraseña ni base en los datos existentes. Si el puerto está ocupado, resuelve el conflicto antes de iniciar el servicio; no elimines el volumen para “arreglar” una clave sin confirmar primero que los datos puedan descartarse.
+Compose publica PostgreSQL en el puerto local `5432` y conserva sus datos en el volumen `postgres-data`. Si ya se inicializó ese volumen, cambiar las variables de inicialización en `backend/.env` no recrea usuarios, contraseña ni base en los datos existentes. Si el puerto está ocupado, resuelve el conflicto antes de iniciar el servicio; no elimines el volumen para “arreglar” una clave sin confirmar primero que los datos puedan descartarse. Para un despliegue autohospedado, seguir el único procedimiento operativo documentado: [Manual de Despliegue, sección 2](DEPLOYMENT_MANUAL.md#2-método-recomendado-postgresql-nativo--gunicorn--nginx); no existe un Compose de producción en este repositorio.
 
 ### Dev server frente a build same-origin
 
-`frontend/vite.config.js` en modo dev sirve Vite por 5173 y configura proxy a Django para `/api`, `/django-admin` y `/static`; el proxy reemplaza `Origin` por `http://localhost:5173` en las solicitudes. `/django-admin` y `/static` son rutas de proxy heredadas, no las rutas del backend de la rama `azure`. El cliente usa `/api` si `VITE_API_URL` no está definida. Para acceder directamente a Django, usa la URL completa con sufijo `/api`.
+`frontend/vite.config.js` en modo dev sirve Vite por 5173 y configura proxy a Django para `/api`, `/django-admin` y `/static`; el proxy reemplaza `Origin` por `http://localhost:5173` en las solicitudes. `/django-admin` y `/static` son rutas de proxy heredadas, no las rutas del backend canónico de la rama `azure`. El cliente usa `/api` si `VITE_API_URL` no está definida. Para acceder directamente a Django, usa la URL completa con sufijo `/api`.
 
 El build same-origin actual compila con `VITE_API_URL=/api` y `VITE_STATIC_BASE=/api/static/` (valores en `.github/workflows/deploy.yml`). En runtime SPA/API comparten host; el `base` de Vite solo construye URLs de assets y Django resuelve el fallback SPA. En split-origin el build usa URL absoluta backend en `VITE_API_URL`; ese valor queda visible en JS público. Vite prioriza variables exportadas frente a `.env*`, pero retirar `frontend/.env.local` viejo y revisar `frontend/dist/index.html` evita compilar accidentalmente una API distinta. Para configuración completa de publicación, consultar el manual de despliegue.
 
 ## 2. Configuración y procesamiento HTTP
 
-`backend/config/settings.py` fija idioma `es-ar`, zona horaria `America/Argentina/Mendoza`, `USE_TZ=True`, DRF `SessionAuthentication`, permisos por defecto `IsAuthenticated`, paginación `PageNumberPagination` de 100 registros y `DEFAULT_CRE_HOURS=25`. PostgreSQL se configura mediante `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` y `POSTGRES_PORT`.
+`backend/config/settings.py` fija idioma `es-ar`, zona horaria `America/Argentina/Mendoza`, `USE_TZ=True`, autenticación de DRF basada en [SessionAuthentication](https://www.django-rest-framework.org/api-guide/authentication/#sessionauthentication), permisos por defecto `IsAuthenticated`, paginación [PageNumberPagination](https://www.django-rest-framework.org/api-guide/pagination/#pagenumberpagination) de 100 registros y `DEFAULT_CRE_HOURS=25`. PostgreSQL se configura mediante `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST` y `POSTGRES_PORT`.
 
-Middleware, en orden: `SecurityMiddleware`, `ProxyAccessMiddleware`, WhiteNoise, sesiones, CORS, Common, CSRF, Authentication, Messages y clickjacking. `SECURE_PROXY_SSL_HEADER` confía en `X-Forwarded-Proto`; el proxy frontal debe sobrescribirlo. `PROXY_ACCESS_SECRET` está vacío por defecto; al configurarlo, `ProxyAccessMiddleware` exige el header `X-Proxy-Access-Secret` salvo paths exentos (health, admin, estáticos, etc.) o host local. Una excepción incorrecta puede verse como 403 de aplicación.
+La cadena de [middlewares de Django](https://docs.djangoproject.com/es/6.0/topics/http/middleware/), en orden: `SecurityMiddleware`, `ProxyAccessMiddleware`, WhiteNoise, sesiones, CORS, Common, CSRF, Authentication, Messages y clickjacking. La directiva [`SECURE_PROXY_SSL_HEADER`](https://docs.djangoproject.com/es/6.0/ref/settings/#secure-proxy-ssl-header) confía en `X-Forwarded-Proto`; el proxy frontal debe sobrescribirlo. `PROXY_ACCESS_SECRET` está vacío por defecto; al configurarlo, `ProxyAccessMiddleware` exige el header `X-Proxy-Access-Secret` salvo paths exentos (health, admin, estáticos, etc.) o host local. Una excepción incorrecta puede verse como 403 de aplicación.
 
 `backend/config/urls.py` define `/healthz`, el admin Django en `/api/sadmin-creapp-panel/`, estáticos en `/api/static/`, API bajo `/api/` y catch-all final para la SPA (`index.html`). `STATIC_ROOT=backend/staticfiles`; `frontend/dist` es template dir y `STATICFILES_DIRS`. Alinear esos paths con `frontend/vite.config.js` y los workflows al cambiar base/routing.
 
@@ -147,7 +158,7 @@ Las líneas representan asociaciones UML, sin dirección de ejecución. La multi
 
 ### Catálogo académico
 
-- `ConfiguracionCRE`: `horas_por_cre` (default de settings, 25) y `actualizado_en`. Se espera una sola fila: `save()` reutiliza la primera PK si se intenta insertar otra; `get_instance()` crea/obtiene PK 1; `get_hours_per_cre()` cae al default si no hay fila. La equivalencia se usa también en los endpoints temporales de carga docente.
+- `ConfiguracionCRE`: `horas_por_cre` (default de settings, 25) y `actualizado_en`. Modela la equivalencia horaria por crédito académico según el marco del Sistema Argentino de Créditos Académicos (RTF / Res. Ministerial ME 1870/19 y acuerdos CIN), donde habitualmente 1 crédito representa 25 horas de dedicación total del estudiante. Se espera una sola fila: `save()` reutiliza la primera PK si se intenta insertar otra; `get_instance()` crea/obtiene PK 1; `get_hours_per_cre()` cae al default si no hay fila. La equivalencia se usa también en los endpoints temporales de carga docente.
 - `UnidadAcademica` (`nombre`, `sigla` única) → varias `Carrera`. `Carrera` (`nombre`, `codigo` único, `nivel` PG/G) pertenece a una unidad con `PROTECT`.
 - `PlanEstudio` pertenece a `Carrera` (`PROTECT`); `ordenanza` única; `creditos`, fechas `vigente_desde` y opcional `vigente_hasta`, nombre/descripcion. También tiene `UniqueConstraint(carrera,nombre)`. `horas` es propiedad calculada `creditos * ConfiguracionCRE.get_hours_per_cre()`; no se serializa en el serializer actual.
 - `EspacioCurricular`: código único, nombre, tipo T1–T4, año 1–10, período `ANUAL`/`1S`/`2S`, créditos, `horas_ip`, `horas_ta`; `horas_totales` se calcula sumando IP+TA.
@@ -183,7 +194,7 @@ La semántica de borrado difiere por recurso y debe respetarse al añadir endpoi
 
 ## 4. Identidad, sesión, rol y permisos
 
-`accounts.UserProfile` es OneToOne con User; perfil por defecto DOCENTE creado en `post_save`. `get_available_roles()` (`accounts/permissions.py`) agrega admin si `is_staff`, `is_superuser` o perfil ADMIN; agrega docente si el perfil falta o es DOCENTE. Por tanto, perfil, flags Django y rol activo no son equivalentes. `get_active_role()` lee `active_role` de sesión si está disponible; si no, prioriza admin y luego primer rol.
+`accounts.UserProfile` es OneToOne con User; perfil por defecto DOCENTE creado mediante una [señal `post_save` de Django](https://docs.djangoproject.com/es/6.0/ref/signals/#post-save). `get_available_roles()` (`accounts/permissions.py`) agrega admin si `is_staff`, `is_superuser` o perfil ADMIN; agrega docente si el perfil falta o es DOCENTE. Por tanto, perfil, flags Django y rol activo no son equivalentes. `get_active_role()` lee `active_role` de sesión si está disponible; si no, prioriza admin y luego primer rol.
 
 Endpoints de auth (`backend/accounts/views.py`, bajo `/api/auth`):
 
@@ -195,15 +206,15 @@ Endpoints de auth (`backend/accounts/views.py`, bajo `/api/auth`):
 | `POST /api/auth/role` | Autenticado + CSRF | `{ "role": "docente" }` o admin si disponible; actualiza sesión activa. |
 | `POST /api/auth/logout` | Autenticado + CSRF | Elimina rol de sesión y cierra sesión. |
 
-DRF exige CSRF para métodos inseguros de usuarios autenticados mediante `SessionAuthentication`; la petición anónima de login es la excepción observada. El token por sí solo no autentica. En frontend `api.ts` usa `withCredentials`, toma token CSRF de JSON (`csrfToken`/`csrf_token`) o cookie `csrftoken` y agrega `X-CSRFToken`. En split-origin la SPA necesita enviar el token JSON porque no puede leer cookie del dominio backend; requiere CORS/CSRF exactos y cookies compatiblemente configuradas.
+DRF exige CSRF para métodos inseguros de usuarios autenticados mediante [`SessionAuthentication`](https://www.django-rest-framework.org/api-guide/authentication/#sessionauthentication), conforme a las directivas de [protección CSRF en Django](https://docs.djangoproject.com/es/6.0/ref/csrf/) y al [OWASP CSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html); la petición anónima de login es la excepción observada. El token por sí solo no autentica. En frontend `api.ts` usa `withCredentials`, toma token CSRF de JSON (`csrfToken`/`csrf_token`) o cookie `csrftoken` y agrega `X-CSRFToken`. En split-origin la SPA necesita enviar el token JSON porque no puede leer cookie del dominio backend; requiere CORS/CSRF exactos y cookies compatiblemente configuradas.
 
-`IsAdminProfile` comprueba `is_admin_user(user, request.session)`, que a su vez compara el rol **activo**. No basta revisar `profile.role` aislado al cambiar permisos. `AdminWritePermissionMixin` de academics deja lectura a cualquier autenticado y exige rol admin en create/update/partial_update/destroy. Planning tiene otros scopes y excepciones descritos debajo.
+`IsAdminProfile` comprueba `is_admin_user(user, request.session)`, que a su vez compara el rol **activo**, implementado mediante [permisos personalizados de DRF](https://www.django-rest-framework.org/api-guide/permissions/#custom-permissions). No basta revisar `profile.role` aislado al cambiar permisos. `AdminWritePermissionMixin` de academics deja lectura a cualquier autenticado y exige rol admin en create/update/partial_update/destroy. Planning tiene otros scopes y excepciones descritos debajo.
 
 `UserViewSet` solo lista/crea/actualiza/desactiva docentes: queryset excluye administradores y superusers; create fija rol DOCENTE. El usuario serializado expone username/nombres/email/is_active/rol. El frontend de asignaciones debe tolerar docentes importados con solo username poblado.
 
 ## 5. API: contratos, recursos, métodos y filtros
 
-`backend/config/api_urls.py` registra un `DefaultRouter(trailing_slash=False)`. Las rutas registradas terminan sin `/`, por ejemplo `/api/programas`. El catch-all final de `backend/config/urls.py` también coincide con cualquier ruta restante bajo `/api/`, así que una URL mal escrita o con slash final puede responder `index.html` como HTTP 200, sin llegar a la redirección de `APPEND_SLASH`. Para clientes API, usar paths registrados sin slash y validar también `Content-Type`, no solo el status. Para `ModelViewSet`, los verbos CRUD indicados son el comportamiento general, salvo restricciones anotadas; `PUT` reemplaza campos requeridos y `PATCH` permite cambios parciales. Las colecciones paginadas responden `{count,next,previous,results}` con página de 100; `/api/espacios-asignados` devuelve un array simple. Aceptar ambos formatos no recorre automáticamente las páginas siguientes. No confundir rutas actuales con `docs/API.md`, que lista contratos heredados.
+`backend/config/api_urls.py` registra un [`DefaultRouter(trailing_slash=False)`](https://www.django-rest-framework.org/api-guide/routers/#defaultrouter). Las rutas registradas terminan sin `/`, por ejemplo `/api/programas`. El catch-all final de `backend/config/urls.py` también coincide con cualquier ruta restante bajo `/api/`, así que una URL mal escrita o con slash final puede responder `index.html` como HTTP 200, sin llegar a la redirección de `APPEND_SLASH`. Para clientes API, usar paths registrados sin slash y validar también `Content-Type`, no solo el status. Para [`ModelViewSet`](https://www.django-rest-framework.org/api-guide/viewsets/#modelviewset), los verbos CRUD indicados son el comportamiento general, respetando la semántica de [RFC 9110 (HTTP Semantics)](https://www.rfc-editor.org/rfc/rfc9110.html), salvo restricciones anotadas; `PUT` reemplaza campos requeridos y `PATCH` permite cambios parciales. Las colecciones paginadas responden `{count,next,previous,results}` con página de 100; `/api/espacios-asignados` devuelve un array simple. Aceptar ambos formatos no recorre automáticamente las páginas siguientes. No confundir rutas actuales con `docs/API.md`, que lista contratos heredados.
 
 ### Recursos académicos y usuarios
 
@@ -250,7 +261,7 @@ El servicio `planning/services/calendar_generation.py` itera fechas de forma inc
 
 ### Contratos de serialización destacados
 
-- Academic serializers (`academics/serializers.py`) usan FK como ids enteros. No exponen todos los properties del modelo; revisar `fields` antes de asumir un atributo API. DRF `ModelSerializer` no ejecuta automáticamente todos los `Model.clean()` personalizados al validar.
+- Academic serializers (`academics/serializers.py`) usan FK como ids enteros. No exponen todos los properties del modelo; revisar `fields` antes de asumir un atributo API. El [`ModelSerializer`](https://www.django-rest-framework.org/api-guide/serializers/#modelserializer) de DRF no ejecuta automáticamente todos los `Model.clean()` personalizados al validar.
 - Programa create admite plan_ec, año, descripción y textos de secciones. Update solo permite año/los textos; no mueve el programa de `PlanEstudioEC`.
 - Unidad create acepta programa/número/descripcion y valida programa activo + asignación; update solo número/descripcion. `competencias` es de lectura en objeto normal; la asignación va por acción aparte.
 - Actividad create acepta `unidad_ids` obligatorio no vacío, valida programa asignado, unidades activas del mismo programa; IP requiere clase del mismo programa, día permitido si hay reglas activas, sin fechas TA, y suma horas IP no mayor a duración definida (cuando el día tiene inicio/fin). TA prohíbe clase y valida orden de fechas. Update `unidad_ids` es opcional; si se omite conserva M2M.
@@ -258,12 +269,12 @@ El servicio `planning/services/calendar_generation.py` itera fechas de forma inc
 
 ## 6. Validación, invariantes y límites de consistencia
 
-No asumir que los validators de Django se ejecutan automáticamente al hacer `.save()` o `.objects.create()`: `Model.save()` no llama `full_clean()` por defecto.
+No asumir que los validadores de Django se ejecutan automáticamente al hacer `.save()` o `.objects.create()`: conforme al [ciclo de validación de objetos en Django](https://docs.djangoproject.com/es/6.0/ref/models/instances/#validating-objects), `Model.save()` no invoca `full_clean()` por defecto.
 
-- `AsignacionDocente.clean()` implementa detección de solapamiento; `save()` no llama `full_clean()`. El serializer DRF valida fechas y solapamiento antes de guardar. `AsignacionDocenteViewSet` no agrega transacción ni lock y `AsignacionDocenteAdmin` no sobrescribe `save_model()` con `select_for_update()`. La DB solo tiene una constraint para `vigente_desde <= vigente_hasta`; dos requests concurrentes pueden pasar el chequeo y crear intervalos solapados. No hay garantía de atomicidad para esta regla.
+- `AsignacionDocente.clean()` implementa detección de solapamiento; `save()` no llama `full_clean()`. El serializer DRF valida fechas y solapamiento antes de guardar. `AsignacionDocenteViewSet` no agrega transacción ni lock y `AsignacionDocenteAdmin` no sobrescribe `save_model()` con [`select_for_update()`](https://docs.djangoproject.com/es/6.0/topics/db/transactions/). La DB solo tiene una constraint para `vigente_desde <= vigente_hasta`; dos requests concurrentes pueden pasar el chequeo y crear intervalos solapados. No hay garantía de atomicidad para esta regla.
 - `Actividad.clean()` tiene checks fecha TA y clase-programa, pero su `save()` no los llama. La ruta API valida parte de estas reglas en serializer, pero otros callers ORM/imports pueden evitarlas. `ActividadAjuste` y `ClaseCalendario` sí hacen `full_clean()` en `save()`; `UnidadCompetencia` también.
 - `EspacioCurricular` serializers/model validators se aplican en create de serializer, pero los partial saves ORM no activan validadores. Endpoint temporal llama explícitamente `full_clean()` antes de `save(update_fields=...)`; conservar ese patrón.
-- Constraints DB confirmadas en modelos: unicidad de catálogo/relaciones y fechas indicadas en `Meta.constraints`, checks de rango temporal de AsignacionDocente y de orden horario condicional de DiaClasePrograma. Otros mínimos, cruces de FK, scope actual y reglas de actividad son validación Python/serializer; no describirlos como checks SQL.
+- Constraints DB confirmadas en modelos: unicidad de catálogo/relaciones y fechas indicadas en [`Meta.constraints`](https://docs.djangoproject.com/es/6.0/ref/models/options/#constraints), checks de rango temporal de AsignacionDocente y de orden horario condicional de DiaClasePrograma. Otros mínimos, cruces de FK, scope actual y reglas de actividad son validación Python/serializer; no describirlos como checks SQL.
 - `ConfiguracionCRE` singleton es convención de `save()` y código de helpers, no una constraint de unicidad global por tabla.
 - La acción calendar genera eventos idempotentemente por la restricción `(programa,fecha)`, pero concurrent requests pueden encontrarse con IntegrityError; revisar si se transforma a error amable al sumar concurrencia.
 
@@ -271,7 +282,7 @@ No asumir que los validators de Django se ejecutan automáticamente al hacer `.s
 
 ### Importar estructura académica
 
-Comando `backend/academics/management/commands/import_academic_xlsx.py`; trabaja en `transaction.atomic()`, hace upsert por claves y permite `--dry-run` (fuerza rollback al final). Ejemplo desde `backend/`:
+Comando `backend/academics/management/commands/import_academic_xlsx.py`, implementado como un [comando de gestión personalizado de Django](https://docs.djangoproject.com/es/6.0/howto/custom-management-commands/); procesa planillas mediante [`openpyxl`](https://openpyxl.readthedocs.io/), trabaja en [`transaction.atomic()`](https://docs.djangoproject.com/es/6.0/topics/db/transactions/), hace upsert por claves y permite `--dry-run` (fuerza rollback al final). Ejemplo desde `backend/`:
 
 ```sh
 python manage.py import_academic_xlsx /ruta/datos.xlsx \
@@ -293,7 +304,7 @@ La importación de docentes usa legajo/id_docente para construir `docente-<id>`,
 
 ### Migraciones
 
-Modelos cambian primero en Python; generar migración desde `backend/`, inspeccionarla, probar apply y rollback en DB temporal. Migraciones deben describir schema/data durables; no usar importaciones externas no versionadas como requisito oculto de `migrate`. Revisar dependencias/app registry histórico y hacer seed idempotente. Ejemplo de ciclo:
+Modelos cambian primero en Python; generar migración desde `backend/`, inspeccionarla, probar apply y rollback en DB temporal, siguiendo las directivas del subsistema de [migraciones de Django](https://docs.djangoproject.com/es/6.0/topics/migrations/). Migraciones deben describir schema/data durables; no usar importaciones externas no versionadas como requisito oculto de `migrate`. Revisar dependencias/app registry histórico y hacer seed idempotente. Ejemplo de ciclo:
 
 ```sh
 cd backend
@@ -307,7 +318,7 @@ python manage.py showmigrations
 
 ## 8. Pruebas y diagnóstico del backend
 
-Desde `backend/` con venv, variables de entorno de test y una DB PostgreSQL aislada cuyo usuario pueda crear la base temporal de Django:
+Desde `backend/` con venv, variables de entorno de test y una DB PostgreSQL aislada cuyo usuario pueda crear la base temporal de Django, ejecutadas con el marco integrado de [Testing in Django](https://docs.djangoproject.com/es/6.0/topics/testing/):
 
 ```sh
 python manage.py test
@@ -320,7 +331,9 @@ python manage.py makemigrations --check --dry-run
 
 Cobertura existente en `accounts/tests.py`: login username/email/inactivo, roles, sesión/`me`, CSRF, usuarios CRUD/permisos/baja y rechazo de contraseñas débiles. El nombre/comentarios de `PasswordValidationGapTest` están desactualizados: ambos serializers sí validan la contraseña, y los tests esperan que `is_valid()` sea falso. Hay que corregir nombres/comentarios cuando se trabaje esa suite.
 
-`academics/tests.py` verifica import XLSX, dry-run, alias y upsert docente. `planning/tests.py` cubre rangos/overlap en validación de modelo, invariantes IP/TA, competencia-plan, generación calendar (repetición/sobrescritura), seed e integración API con CSRF, scope docente/admin, bajas lógicas, competencias y ajustes. En la revisión del 2026-09-29, la suite completa ejecutada con DB SQLite temporal corrió 77 tests: 75 pasaron y fallaron `test_import_tipo_actividad_xlsx_creates_and_updates_tipificaciones` y `test_import_tipo_actividad_xlsx_dry_run_rolls_back`, porque sus conteos esperan una tabla vacía mientras la migración inicializa 33 tipos. SQLite no reemplaza la verificación con PostgreSQL. No interpretar este resultado como una suite verde.
+`academics/tests.py` verifica el importador XLSX, el modo `--dry-run`, resolución de alias y la creación de docentes. `planning/tests.py` cubre rangos y no solapamiento temporal, invariantes de actividades IP/TA, consistencia entre competencias y planes, generación de calendario académico, inicialización de datos e integración de la API con CSRF, roles y restricciones de acceso.
+
+> **Nota técnica sobre el entorno de pruebas:** La suite automatizada debe ejecutarse contra una base de datos PostgreSQL de prueba con permisos de creación de esquemas (`CREATEDB`). El uso de SQLite para pruebas rápidas en memoria no reproduce de forma fidedigna los tipos de datos ni las restricciones relacionales de producción. Asimismo, las pruebas unitarias de importación de tipos (`test_import_tipo_actividad_xlsx_*`) asumen un catálogo inicialmente limpio, por lo que deben ejecutarse considerando los datos sembrados por la migración `0011_seed_ip_tipo_actividad`.
 
 Al diagnosticar: confirma HTTP method, path sin slash final y `Content-Type`; un HTTP 200 HTML puede ser el catch-all SPA, no una respuesta API. Verifica usuario, `active_role`, cookies y `X-CSRFToken`; serializer (create/update pueden diferir); filtros/scope; migraciones aplicadas y forma `results` paginada vs array. Los clientes deben seguir `next` si requieren la colección completa. Para queries no aumentes `select_related/prefetch_related` sin necesitar datos ni quites optimizaciones existentes a ciegas.
 
@@ -330,7 +343,7 @@ Al diagnosticar: confirma HTTP method, path sin slash final y `Content-Type`; un
 
 ## 9. Comandos, estructura y build
 
-Dependencias y scripts en `frontend/package.json`; no se declara script `lint`:
+Dependencias y scripts en `frontend/package.json`; `npm test` ejecuta solo Vitest (pruebas frontend), `npm run typecheck` comprueba TypeScript y `npm run build` compila la SPA. Las pruebas Django se ejecutan aparte mediante `python manage.py test` desde `backend/`. No se declara script `lint`:
 
 ```sh
 cd frontend
@@ -342,13 +355,13 @@ npm run build
 npm run preview
 ```
 
-React StrictMode, `QueryClientProvider` y devtools solo en DEV se montan en `src/main.tsx`. QueryClient desactiva refetch on focus y usa `staleTime` de cinco minutos. Vite tests Vitest + jsdom con `src/test/setup.ts`.
+React StrictMode ([React StrictMode](https://react.dev/reference/react/StrictMode)), [`QueryClientProvider`](https://tanstack.com/query/latest/docs/framework/react/reference/QueryClientProvider) y devtools solo en DEV se montan en `src/main.tsx`. QueryClient desactiva refetch on focus y usa `staleTime` de cinco minutos. Pruebas de interfaz configuradas con [Vitest](https://vitest.dev/) + jsdom en `src/test/setup.ts`.
 
 Estructura real: páginas por rol; `components/Admin/AdminCrudPage.tsx` para CRUD administrativo configurable; componentes `Layout`, `Forms`, `Tables`, `Common`; `contexts/AuthContext.tsx`; `services/api.ts`; hooks de sesión/tema/refresco y selección; `test/`. La guía antigua `frontend/README_SETUP.md` tiene paths JS/JSX y rutas proxy/auth obsoletas; el código TypeScript actual es referencia.
 
 ## 10. Rutas y mapa de páginas
 
-`src/App.tsx` usa React Router `BrowserRouter`; páginas se importan con `React.lazy`/`Suspense`. `ProtectedRoute` revisa auth y un rol exacto en el cliente; esto es una puerta UX, no control de seguridad de API. Ruta `/` deriva a login o `/admin`/`/docente`; ruta SPA `/sadmin-creapp-panel` redirige a admin Django `/api/sadmin-creapp-panel/`.
+`src/App.tsx` usa React Router [`BrowserRouter`](https://reactrouter.com/); las páginas se importan con [`React.lazy`](https://react.dev/reference/react/lazy) y [`Suspense`](https://react.dev/reference/react/Suspense). `ProtectedRoute` revisa auth y un rol exacto en el cliente; esto es una puerta UX, no control de seguridad de API. Ruta `/` deriva a login o `/admin`/`/docente`; ruta SPA `/sadmin-creapp-panel` redirige a admin Django `/api/sadmin-creapp-panel/`.
 
 | Path SPA | Página/comportamiento |
 |---|---|
@@ -373,7 +386,7 @@ Si se agrega o renombra ruta, coordinar `App.tsx`, menú desktop `Sidebar.tsx`, 
 
 `AuthContext` obtiene sesión real consultando `/auth/csrf` y `/auth/me` en paralelo al montar. Puede hidratar usuario optimista desde `localStorage['cre_auth_user']`, pero ese objeto solo guarda nombre/rol/availableRoles para presentación: no autentica, no contiene token de sesión y se verifica contra cookie backend. `login`, `switchRole`, `logout` llaman API y actualizan storage; el estado de rol proviene del payload del servidor.
 
-`services/api.ts` usa Axios `baseURL = import.meta.env.VITE_API_URL || '/api'`, `withCredentials:true`, Content-Type JSON. Request interceptor manda `X-CSRFToken` desde token en memoria o cookie readable. Response interceptor guarda csrfToken de respuesta, despacha `cre:api-data-changed` para POST/PUT/PATCH/DELETE; auth-like 401 y ciertos 403 redirigen a `/login`, excepto el probe `/auth/me` y login page. No tratar cualquier 403 de autorización como expiración de sesión sin actualizar/validar `isAuthenticationError`.
+`services/api.ts` usa [Axios](https://axios-http.com/docs/intro) con `baseURL = import.meta.env.VITE_API_URL || '/api'`, `withCredentials:true`, Content-Type JSON y [mecanismos de interceptores](https://axios-http.com/docs/interceptors). El interceptor de peticiones envía `X-CSRFToken` desde token en memoria o cookie readable. El interceptor de respuesta guarda csrfToken de respuesta, despacha `cre:api-data-changed` para POST/PUT/PATCH/DELETE; auth-like 401 y ciertos 403 redirigen a `/login`, excepto el probe `/auth/me` y login page. No tratar cualquier 403 de autorización como expiración de sesión sin actualizar/validar `isAuthenticationError`.
 
 Selección docente no es identidad/permiso: `useDocenteSelection` guarda en `sessionStorage` `selected_espacio_curricular_id`, `selected_plan_estudio_ec_id`, `selected_espacio_nombre`. `Espacios.tsx` selecciona espacio; Dashboard, Programas, PlanificacionIP y PlanificacionTA dependen de esas keys. `setDocenteSelection` emite el evento local; el Topbar y hook escuchan cambios. Al crear/autoasignar espacio temporal, invalidar `['espacios-asignados']` y `['planes-estudio-ec']`, actualizar las tres keys y navegar/consultar con el nuevo plan_ec; no confiar que otros tabs comparten sessionStorage automáticamente.
 
@@ -381,18 +394,18 @@ Tema: `useTheme` observa class del `<html>` y persiste `cre_theme` en localStora
 
 ### React Query + refresco local
 
-TanStack Query gestiona fetch/cache en páginas que usan `useQuery`/`useMutation`; otras páginas usan estado local/Axios. Las query keys incluyen selección (por ejemplo `['programas', selectedPlanEcId]`). Mutaciones deben invalidar keys dependientes explícitamente. `AdminCrudPage` además escucha `useApiAutoRefresh`; el hook revalida tras evento de mutación, focus y regreso de visibility con debounce. No todos los recursos usan QueryClient. Las páginas que extraen solo `response.data.results` no siguen `next`; muestran la primera página (hasta 100 elementos), aunque haya más.
+[TanStack Query](https://tanstack.com/query/latest) gestiona fetch/cache en páginas que usan [`useQuery` y `useMutation`](https://tanstack.com/query/latest/docs/framework/react/guides/queries); otras páginas usan estado local/Axios. Las query keys incluyen selección (por ejemplo `['programas', selectedPlanEcId]`). Mutaciones deben invalidar keys dependientes explícitamente. `AdminCrudPage` además escucha `useApiAutoRefresh`; el hook revalida tras evento de mutación, focus y regreso de visibility con debounce. No todos los recursos usan QueryClient. Las páginas que extraen solo `response.data.results` no siguen `next`; muestran la primera página (hasta 100 elementos), aunque haya más.
 
 El interceptor evento notifica una mutación remota, no realiza invalidación TanStack automáticamente. Hooks/páginas que usan Query deben invalidar `queryClient` en success; `useApiAutoRefresh` solo llama callback de refresco registrado.
 
 ## 12. Páginas/formularios, tipos, estilos y tests
 
 - `AdminCrudPage<T>` recibe endpoint, campos (`CrudField`), default values, columnas, detalles, transforma payload y callbacks. Maneja respuesta array o DRF `{results}`; submit create POST / edit PATCH / delete DELETE. Validación required es superficial; backend siempre valida. Para select FK numérico poner `valueType:'number'`; opcionales deben tener `emptyAs:null` si serializer espera null (como fechas/FK). Páginas finas contienen carga de options/renderers; al mutar catálogo que alimenta select usar `onMutationSuccess`/React Query invalidate.
-- Planning docente comparte `PlanningActivityCommonFields` para tipo, minutos, modalidad, unidades y descripción. IP/TA tienen schemas Zod + React Hook Form separados (`PlanificacionIP.tsx`, `PlanificacionTA.tsx`); frontend captura duración en minutos y convierte a horas decimal antes de POST/PATCH. Calendario `PlanningCalendar` arma semanas lunes-domingo, callback de metadatos por fecha y navegación teclado, las reglas de negocio las provee página + backend.
+- Planning docente comparte `PlanningActivityCommonFields` para tipo, minutos, modalidad, unidades y descripción. IP/TA tienen esquemas declarativos en [Zod](https://zod.dev/) e integración con [React Hook Form](https://react-hook-form.com/) (`PlanificacionIP.tsx`, `PlanificacionTA.tsx`); frontend captura duración en minutos y convierte a horas decimal antes de POST/PATCH. Calendario `PlanningCalendar` arma semanas lunes-domingo, callback de metadatos por fecha y navegación teclado, las reglas de negocio las provee página + backend.
 - Tipos HTTP no están en un SDK único central; varias interfaces se repiten dentro de páginas. Al cambiar serializer, buscar y actualizar todos los consumidores; evitar mantener una definición TS local vieja.
 - CSS: tokens globales `src/index.css`; estilos por App/componentes y CSS de páginas/layout. Clases históricas aún conviven con tokens, respetar convenciones existentes en el archivo del componente antes de agregar variables. Tailwind está instalado pero no significa que cada componente lo use.
 - `src/index.css` importa Inter/Outfit desde Google Fonts; si el entorno limita egress o se requiere font self-hosted, es una dependencia de red a decidir en un cambio. El tema usa variables CSS, `.light`/`.dark` y fallback `prefers-color-scheme`.
-- Tests en `src/test/` usan Vitest, Testing Library, `vi.mock('../services/api')`; wrappers de QueryClient/MemoryRouter/contextos según página. Casos actuales cubren auth, rutas protegidas, login, layouts/tablas, catálogo y flujos IP/TA, calendario y programas. `setup.ts` configura jest-dom y fallback localStorage; limpiar también `sessionStorage`, QueryClient y mocks por test cuando corresponda.
+- Tests en `src/test/` usan el ejecutor [Vitest](https://vitest.dev/) y utilidades de [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/), `vi.mock('../services/api')`; wrappers de QueryClient/MemoryRouter/contextos según página. Casos actuales cubren auth, rutas protegidas, login, layouts/tablas, catálogo y flujos IP/TA, calendario y programas. `setup.ts` configura jest-dom y fallback localStorage; limpiar también `sessionStorage`, QueryClient y mocks por test cuando corresponda.
 
 No asumir test coverage del repositorio más allá de archivos existentes ni afirmar que pasó sin ejecutarlo. GitHub workflows inspeccionados compilan/despliegan, no configuran una suite frontend/backend común como gate; verificar definición actual antes de contar con CI.
 
@@ -433,11 +446,11 @@ En `planning/viewsets.py`, declarar la acción con `@action` en el viewset corre
 11. **No hay integración SIU implementada en backend.** No se encontraron servicios/endpoints SIU/Guaraní en `backend/`; una solicitud/documentación de integración no constituye un cliente integrado. Import XLSX existente es el flujo comprobable.
 12. **No versionar/leak secrets.** Variables `VITE_*` se compilan al JS público. API REST no tiene prefijo `/api/v1/`; cambios incompatibles requieren coordinación frontend/backend y una estrategia de compatibilidad si hay despliegues separados.
 13. **Admin route acoplada.** Django Admin SPA redirect, `LOGIN_URL`, `urls.py`, `PROXY_ACCESS_EXEMPT_PATHS` y `App.tsx` deben alinearse. No renombrar solo un punto.
-14. **Rutas/deploy branches.** `STATIC_URL`, static base Vite, API base y hosting deben ir en conjunto. Consultar `DEPLOYMENT_MANUAL.md`; el manual Azure antiguo y workflows pueden diferir.
+14. **Alineación de rutas y artefactos estáticos.** Las directivas `STATIC_URL` (`/api/static/`), el prefijo base de Vite (`VITE_STATIC_BASE=/api/static/`) y la URL base de API (`VITE_API_URL=/api`) deben mantenerse estrictamente coordinadas entre Django, Nginx y la compilación de la SPA.
 
-## 15. Pendientes de implementación observados
+## 15. Aspectos de Arquitectura y Deuda Técnica Identificada
 
-Estos son hallazgos de revisión del checkout `azure` en `7180921`, no cambios incluidos en este manual. Revalidarlos contra el código antes de abordarlos:
+Los siguientes aspectos corresponden a puntos de diseño, validación y consistencia identificados en el código base que deben abordarse en sucesivas iteraciones de mantenimiento:
 
 - **Scope del calendario docente:** `ClaseCalendarioSerializer` permite en create y update asociar programa o día de clase fuera de la asignación del docente. Agregar validación backend de las relaciones y pruebas negativas por rol; la acción `generar-rango` ya verifica el programa.
 - **Mutación del catálogo desde la carga temporal:** el endpoint temporal de espacio puede actualizar un espacio curricular existente por código antes de comprobar la asignación. Revisar autorización/ownership y separar el alta de prueba de la edición del catálogo compartido.
@@ -448,7 +461,7 @@ Estos son hallazgos de revisión del checkout `azure` en `7180921`, no cambios i
 - **Verificación previa al despliegue:** los workflows inspeccionados no ejecutan tests ni migraciones; `deploy.yml` además permite continuar si falla `check --deploy`. Acordar controles obligatorios y estrategia de migración antes de cambiar el pipeline.
 - **Paginación en clientes:** hay consumidores que toman solamente `results` de la primera página (hasta 100 registros). Revisar si cada selector/listado necesita recorrer `next` o si debe filtrar/paginar deliberadamente.
 
-## 16. Lista de revisión para cambios no triviales
+## 16. Lista de control previa a la integración (Checklist de Pull Request)
 
 - [ ] Localicé modelo, serializer, viewset/action, router, cliente y todas las páginas consumiendo payload.
 - [ ] Definí acceso autenticado/admin/docente, scope por asignación y validación de relaciones en servidor.
@@ -473,7 +486,7 @@ npm test
 npm run build
 ```
 
-- [ ] Revisé routing same-origin/local, documentación API afectada y secretos ausentes. No asumir CI ejecuta tests si workflow no lo declara.
+- [ ] Verifiqué el enrutamiento same-origin y local, ausencia de secretos en el código fuente y consistencia de los contratos de la API.
 
 ## 17. Fuentes de código para consulta rápida
 
@@ -482,3 +495,41 @@ npm run build
 - Import/migration/tests: [`backend/academics/management/commands/import_academic_xlsx.py`](../../backend/academics/management/commands/import_academic_xlsx.py), [`backend/planning/management/commands/import_tipo_actividad_xlsx.py`](../../backend/planning/management/commands/import_tipo_actividad_xlsx.py), [`backend/accounts/tests.py`](../../backend/accounts/tests.py), [`backend/academics/tests.py`](../../backend/academics/tests.py), [`backend/planning/tests.py`](../../backend/planning/tests.py).
 - Cliente/rutas: [`frontend/src/App.tsx`](../../frontend/src/App.tsx), [`frontend/src/contexts/AuthContext.tsx`](../../frontend/src/contexts/AuthContext.tsx), [`frontend/src/services/api.ts`](../../frontend/src/services/api.ts), [`frontend/src/hooks/useDocenteSelection.ts`](../../frontend/src/hooks/useDocenteSelection.ts), [`frontend/src/hooks/useApiAutoRefresh.ts`](../../frontend/src/hooks/useApiAutoRefresh.ts), [`frontend/src/components/Admin/AdminCrudPage.tsx`](../../frontend/src/components/Admin/AdminCrudPage.tsx).
 - UI/tests: `frontend/src/pages/admin/`, `frontend/src/pages/docente/`, `frontend/src/components/Forms/`, `frontend/src/test/`, `frontend/src/index.css`.
+
+## 18. Documentación Oficial y Fuentes de Referencia
+
+Para consultar en profundidad las especificaciones técnicas, APIs, herramientas y estándares utilizados en el desarrollo del sistema:
+
+### Backend y Persistencia
+* **Django:** [Documentación oficial de Django 6.0](https://docs.djangoproject.com/es/6.0/)
+* **Django REST Framework:** [Guía oficial de DRF: serializadores, viewsets y permisos](https://www.django-rest-framework.org/)
+* **PostgreSQL:** [Documentación oficial de PostgreSQL (v16/v17)](https://www.postgresql.org/docs/)
+* **Psycopg 3:** [Controlador PostgreSQL avanzado para Python](https://www.psycopg.org/psycopg3/docs/)
+* **OpenPyXL:** [Biblioteca de procesamiento y manipulación de libros XLSX](https://openpyxl.readthedocs.io/)
+* **Gunicorn:** [Servidor WSGI para despliegues en producción](https://docs.gunicorn.org/)
+* **WhiteNoise:** [Servicio directo y optimizado de archivos estáticos para Python](https://whitenoise.readthedocs.io/)
+
+### Frontend e Interfaz de Usuario
+* **React:** [Documentación oficial y guías de React 19](https://react.dev/)
+* **TypeScript:** [Manual de referencia del lenguaje TypeScript](https://www.typescriptlang.org/docs/)
+* **Vite:** [Guía de herramientas y configuración de empaquetado de Vite](https://vite.dev/guide/)
+* **React Router:** [Enrutamiento declarativo para SPAs con React Router 7](https://reactrouter.com/)
+* **TanStack Query:** [Gestión de estado del servidor, caché y sincronización](https://tanstack.com/query/latest/docs/framework/react/overview)
+* **Axios:** [Cliente HTTP basado en promesas con soporte de interceptores](https://axios-http.com/docs/intro)
+* **React Hook Form:** [Gestión de estado y validación eficiente de formularios](https://react-hook-form.com/)
+* **Zod:** [Validación declarativa de esquemas con inferencia de tipos estáticos](https://zod.dev/)
+
+### Seguridad, Transporte y Estándares Web
+* **RFC 9110:** [HTTP Semantics: Especificación IETF de métodos, cabeceras y códigos de estado](https://www.rfc-editor.org/rfc/rfc9110.html)
+* **OWASP:** [Cross-Site Request Forgery Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html)
+* **Django Security:** [Guía de mitigación de vulnerabilidades y cookies de seguridad en Django](https://docs.djangoproject.com/es/6.0/topics/security/)
+
+### Pruebas y Aseguramiento de Calidad
+* **Django Testing:** [Marco integrado de pruebas unitarias y de integración en Django](https://docs.djangoproject.com/es/6.0/topics/testing/)
+* **Vitest:** [Marco nativo de pruebas unitarias ultrarrápido impulsado por Vite](https://vitest.dev/)
+* **React Testing Library:** [Pruebas de interfaz orientadas al usuario y accesibilidad](https://testing-library.com/docs/react-testing-library/intro/)
+* **Testing Library Jest-DOM:** [Matchers de assertions declarativas para el DOM](https://github.com/testing-library/jest-dom)
+
+### Marco Normativo y Académico
+* **Sistema Argentino de Créditos Académicos (RTF):** [Resolución Ministerial ME 1870/19 sobre Reconocimiento de Trayectos Formativos y Créditos Universitarios](https://www.argentina.gob.ar/educacion)
+* **Consejo Interuniversitario Nacional (CIN):** [Acuerdos plenarios y lineamientos curriculares para carreras universitarias](https://www.cin.edu.ar/)
