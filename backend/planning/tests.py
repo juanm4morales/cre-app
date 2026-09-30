@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.apps import apps
-from django.core.management import call_command
+from django.core.management import call_command, CommandError
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -527,6 +527,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
         workbook.save(file_path)
 
     def test_import_tipo_actividad_xlsx_creates_and_updates_tipificaciones(self):
+        baseline_count = TipoActividad.objects.count()
         with TemporaryDirectory() as temp_dir:
             workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
             self._build_tipificaciones_workbook(workbook_path)
@@ -543,7 +544,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
                 stdout=StringIO(),
             )
 
-        self.assertEqual(TipoActividad.objects.count(), 4)
+        self.assertEqual(TipoActividad.objects.count(), baseline_count + 4)
 
         lectura = TipoActividad.objects.get(nombre="Lectura y comprensión de bibliografía")
         self.assertEqual(lectura.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
@@ -561,6 +562,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
         self.assertIn("tipo_actividad", output.getvalue())
 
     def test_import_tipo_actividad_xlsx_dry_run_rolls_back(self):
+        baseline_count = TipoActividad.objects.count()
         with TemporaryDirectory() as temp_dir:
             workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
             self._build_tipificaciones_workbook(workbook_path)
@@ -571,20 +573,52 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
                 "--dry-run",
             )
 
-        self.assertEqual(TipoActividad.objects.count(), 0)
+        self.assertEqual(TipoActividad.objects.count(), baseline_count)
+
+    def test_import_rejects_opposite_dedication_without_mutating_existing_type(self):
+        tipo = TipoActividad.objects.get(nombre="Clase expositiva")
+        tipo.descripcion = "Descripción original"
+        tipo.save(update_fields=["descripcion"])
+
+        with TemporaryDirectory() as temp_dir:
+            workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet["A3"] = tipo.nombre
+            sheet["B3"] = "Descripción importada"
+            workbook.save(workbook_path)
+
+            with self.assertRaisesMessage(CommandError, "no se cambiará"):
+                call_command(
+                    "import_tipo_actividad_xlsx",
+                    str(workbook_path),
+                    tipo_dedicacion=TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO,
+                )
+
+        tipo.refresh_from_db()
+        self.assertEqual(tipo.tipo_dedicacion, TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA)
+        self.assertEqual(tipo.descripcion, "Descripción original")
 
     def test_seed_ip_tipo_actividad_migration_is_idempotent(self):
         migration = import_module("planning.migrations.0011_seed_ip_tipo_actividad")
 
+        tipo_existente = TipoActividad.objects.get(nombre="Clase expositiva")
+        tipo_existente.tipo_dedicacion = TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO
+        tipo_existente.descripcion = "Tipo TA preexistente"
+        tipo_existente.save(update_fields=["tipo_dedicacion", "descripcion"])
+
         migration.seed_ip_tipo_actividad(apps, None)
         migration.seed_ip_tipo_actividad(apps, None)
 
+        tipo_existente.refresh_from_db()
+        self.assertEqual(tipo_existente.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
+        self.assertEqual(tipo_existente.descripcion, "Tipo TA preexistente")
         self.assertEqual(
             TipoActividad.objects.filter(
                 nombre__in=migration.IP_TIPO_ACTIVIDAD_NAMES,
                 tipo_dedicacion=TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA,
             ).count(),
-            len(migration.IP_TIPO_ACTIVIDAD_NAMES),
+            len(migration.IP_TIPO_ACTIVIDAD_NAMES) - 1,
         )
         self.assertEqual(
             TipoActividad.objects.filter(nombre="Clase expositiva").count(),

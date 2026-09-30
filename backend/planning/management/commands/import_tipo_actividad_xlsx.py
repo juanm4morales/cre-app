@@ -89,14 +89,16 @@ class Command(BaseCommand):
             self.stats["tipo_actividad"]["creados"] += 1
             return tipo_actividad
 
+        if tipo_actividad.tipo_dedicacion != tipo_dedicacion:
+            raise CommandError(
+                f'La tipificación "{nombre}" ya existe con dedicación '
+                f'"{tipo_actividad.tipo_dedicacion}"; no se cambiará a "{tipo_dedicacion}".'
+            )
+
         updated_fields = []
         if tipo_actividad.descripcion != descripcion:
             tipo_actividad.descripcion = descripcion
             updated_fields.append("descripcion")
-        if tipo_actividad.tipo_dedicacion != tipo_dedicacion:
-            tipo_actividad.tipo_dedicacion = tipo_dedicacion
-            updated_fields.append("tipo_dedicacion")
-
         if updated_fields:
             tipo_actividad.save(update_fields=updated_fields)
             self.stats["tipo_actividad"]["actualizados"] += 1

@@ -42,16 +42,13 @@ def seed_ip_tipo_actividad(apps, schema_editor):
     TipoActividad = apps.get_model("planning", "TipoActividad")
 
     for nombre in IP_TIPO_ACTIVIDAD_NAMES:
-        tipo_actividad, created = TipoActividad.objects.get_or_create(
+        TipoActividad.objects.get_or_create(
             nombre=nombre,
             defaults={
                 "descripcion": "",
                 "tipo_dedicacion": "IP",
             },
         )
-        if not created and tipo_actividad.tipo_dedicacion != "IP":
-            tipo_actividad.tipo_dedicacion = "IP"
-            tipo_actividad.save(update_fields=["tipo_dedicacion"])
 
 
 def noop_reverse(apps, schema_editor):
