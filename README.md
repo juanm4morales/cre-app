@@ -1,6 +1,6 @@
 # CRE App
 
-Backend Django para gestionar planificación académica basada en criterios de Créditos de Referencia del Estudiantado (CRE). Ver el resumen normativo en [CRE.md](/home/juanm4/Dev/cre-app/CRE.md).
+Backend Django para gestionar planificación académica basada en criterios de Créditos de Referencia del Estudiantado (CRE). Ver el resumen normativo en [CRE.md](./docs/CRE.md).
 
 ## Requisitos
 
@@ -9,7 +9,7 @@ Backend Django para gestionar planificación académica basada en criterios de C
 - Pip (venv recomendado)
 - VS Code (opcional)
 
-Dependencias: ver [requirements.txt](/home/juanm4/Dev/cre-app/requirements.txt)
+Dependencias: ver [requirements.txt](./requirements.txt)
 
 ## Configuración
 
@@ -88,7 +88,7 @@ Si queres que otra PC use tu misma DB en tiempo real:
 
 ## Base de datos con Docker
 
-Usar el compose en [backend/docker-compose.yaml](/home/juanm4/Dev/cre-app/backend/docker-compose.yaml):
+Usar el compose en [backend/docker-compose.yaml](./backend/docker-compose.yaml):
 
 ```sh
 cd backend
@@ -104,8 +104,13 @@ python manage.py createsuperuser  # opcional
 python manage.py runserver
 ```
 
-Panel admin en: http://127.0.0.1:8000/admin/
+Panel admin en: http://127.0.0.1:8000/api/sadmin-creapp-panel/
 Rutas actuales: ver [`config.urls`](./backend/config/urls.py).
+
+## Manuales de mantenimiento
+
+- [Manual de desarrollo](./docs/manuales/DEVELOPER_MANUAL.md) · [LaTeX](./docs/manuales/DEVELOPER_MANUAL.tex) · [PDF](./docs/manuales/DEVELOPER_MANUAL.pdf): arquitectura, dominio, API, frontend y verificación.
+- [Manual de despliegue](./docs/manuales/DEPLOYMENT_MANUAL.md) · [LaTeX](./docs/manuales/DEPLOYMENT_MANUAL.tex) · [PDF](./docs/manuales/DEPLOYMENT_MANUAL.pdf): configuración operativa, redes, backups y workflows observados.
 
 ## Tests
 
@@ -116,7 +121,7 @@ python manage.py test
 
 ## Tunelizacion
 
-Para compartir la app por internet usando Cloudflare Tunnel en entorno de desarrollo, ver [README_TUNELIZACION.md](/home/juanm4/Dev/cre-app/README_TUNELIZACION.md).
+Para compartir la app por internet usando Cloudflare Tunnel en entorno de desarrollo, ver [README_TUNELIZACION.md](./docs/README_TUNELIZACION.md).
 
 ## Estructura
 

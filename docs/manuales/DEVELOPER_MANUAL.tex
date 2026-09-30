@@ -1,0 +1,155 @@
+\documentclass[10pt,a4paper,oneside]{article}
+\usepackage[margin=1.8cm,includeheadfoot]{geometry}
+\usepackage{fontspec}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{pdflscape}
+\usepackage{caption}
+\captionsetup[figure]{hypcap=false,name=Figura,font=small,labelfont=bf,labelsep=period}
+\usepackage{xurl}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{markdown}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{fvextra}
+
+\definecolor{CREBlue}{HTML}{075985}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=CREBlue,
+  urlcolor=CREBlue,
+  pdftitle={Manual de desarrollo y mantenimiento de CREApp},
+  pdfsubject={Manual completo de desarrollo y mantenimiento}
+}
+\setlength{\emergencystretch}{6em}
+\sloppy
+\setlength{\parskip}{0.35em}
+\setcounter{tocdepth}{2}
+\setcounter{secnumdepth}{0}
+\renewcommand{\contentsname}{Contenido}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{CREApp}
+\fancyhead[R]{Manual de desarrollo}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+% The Markdown source embeds SVG links for web rendering. Use the matching,
+% versioned PDF assets when compiling this document with XeLaTeX.
+\ExplSyntaxOn
+\cs_new_protected:Npn \creapp_markdown_image:nn #1#2
+  {
+    \tl_set:Nn \l_tmpa_tl { #1 }
+    \regex_replace_once:nnN { \.svg \Z } { .pdf } \l_tmpa_tl
+    \regex_match:nnTF { classes- } { #1 }
+      {
+        \begin{center}
+          \includegraphics[width=\linewidth,height=.70\textwidth,keepaspectratio]
+            { \l_tmpa_tl }
+          \captionof{figure}{#2}
+        \end{center}
+        \end{landscape}
+      }
+      {
+        \begin{center}
+          \includegraphics[width=\linewidth,height=.76\textheight,keepaspectratio]
+            { \l_tmpa_tl }
+          \captionof{figure}{#2}
+        \end{center}
+      }
+  }
+\cs_new_eq:NN \creappMarkdownImage \creapp_markdown_image:nn
+\cs_new_protected:Npn \creapp_code_span:n #1
+  {
+    \tl_set:Nn \l_tmpa_tl { #1 }
+    \regex_replace_all:nnN { / } { / \c{allowbreak} } \l_tmpa_tl
+    \regex_replace_all:nnN { \. } { . \c{allowbreak} } \l_tmpa_tl
+    \regex_replace_all:nnN { - } { - \c{allowbreak} } \l_tmpa_tl
+    \texttt { \tl_use:N \l_tmpa_tl }
+  }
+\cs_new_eq:NN \creappCodeSpan \creapp_code_span:n
+\ExplSyntaxOff
+\markdownSetup{
+  pipeTables=true,
+  taskLists=true,
+  fencedCode=true,
+  rendererPrototypes={
+    image={\creappMarkdownImage{#3}{#1}},
+    link={\href{#3}{#1}},
+    headingOne={\creappHeadingOne{#1}},
+    headingFour={\clearpage\begin{landscape}\thispagestyle{plain}\subsection*{#1}},
+    codeSpan={\creappCodeSpan{#1}},
+    underscore={\textunderscore\allowbreak}
+  }
+}
+\fvset{breaklines=true,breakanywhere=true}
+\makeatletter
+\def\markdownLaTeXReadAlignments#1{%
+  \advance\markdownLaTeXColumnCounter by 1\relax
+  \ifnum\markdownLaTeXColumnTotal=2\relax
+    \ifnum\markdownLaTeXColumnCounter=1\relax
+      \addto@hook\markdownLaTeXTableAlignment{p{.24\linewidth}}%
+    \else
+      \addto@hook\markdownLaTeXTableAlignment{p{.70\linewidth}}%
+    \fi
+  \else
+    \ifnum\markdownLaTeXColumnCounter=1\relax
+      \addto@hook\markdownLaTeXTableAlignment{p{.18\linewidth}}%
+    \else
+      \addto@hook\markdownLaTeXTableAlignment{p{.37\linewidth}}%
+    \fi
+  \fi
+  \ifnum\markdownLaTeXColumnCounter<\markdownLaTeXColumnTotal\relax\else
+    \expandafter\@gobble
+  \fi\markdownLaTeXReadAlignments}
+\markdownSetup{rendererPrototypes={table={%
+  \markdownLaTeXTable={}%
+  \markdownLaTeXTableAlignment={}%
+  \markdownLaTeXTableEnd={\markdownLaTeXBottomRule\end{longtable}}%
+  \ifx\empty#1\empty\else
+    \addto@hook\markdownLaTeXTable{\begin{table}\centering}%
+    \addto@hook\markdownLaTeXTableEnd{\caption{#1}\end{table}}%
+  \fi
+  \addto@hook\markdownLaTeXTable{\begin{longtable}}%
+  \markdownLaTeXRowCounter=0%
+  \markdownLaTeXRowTotal=#2%
+  \markdownLaTeXColumnTotal=#3%
+  \markdownLaTeXRenderTableRow
+}}}
+\makeatother
+
+\newif\ifcreappFirstHeading
+\creappFirstHeadingtrue
+\newcommand{\creappHeadingOne}[1]{%
+  \ifcreappFirstHeading
+    \global\creappFirstHeadingfalse
+  \else
+    \section{#1}
+  \fi
+}
+\begin{document}
+\begin{titlepage}
+\thispagestyle{empty}
+\vspace*{2cm}
+{\Large\bfseries\color{CREBlue} CREApp\par}
+\vspace{1.3cm}
+{\Huge\bfseries Manual de desarrollo y mantenimiento\par}
+\vspace{0.9cm}
+{\large Arquitectura, contratos de la API y procedimientos de desarrollo\par}
+\vspace{1.2cm}
+\noindent{\color{CREBlue}\rule{\textwidth}{1pt}}
+\vfill
+{\small
+Referencia técnica: rama \texttt{azure}, commit \texttt{7180921}.\par
+Revisión del contenido: 29 de septiembre de 2026.\par
+}
+\end{titlepage}
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+\section*{Propósito y alcance}
+\addcontentsline{toc}{section}{Propósito y alcance}
+\markdownInput{DEVELOPER_MANUAL.md}
+\end{document}

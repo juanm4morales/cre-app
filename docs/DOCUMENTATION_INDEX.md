@@ -2,6 +2,40 @@
 
 All frontend improvements have been documented comprehensively. Use this index to navigate the documentation.
 
+## Manuales de mantenimiento
+
+Para orientarse en el checkout actual, empezar por los manuales contrastados con el código:
+
+- [Manual de desarrollo](manuales/DEVELOPER_MANUAL.md) · [LaTeX](manuales/DEVELOPER_MANUAL.tex) · [PDF](manuales/DEVELOPER_MANUAL.pdf): arquitectura, dominio, API, frontend, pruebas y hallazgos pendientes.
+- [Manual de despliegue](manuales/DEPLOYMENT_MANUAL.md) · [LaTeX](manuales/DEPLOYMENT_MANUAL.tex) · [PDF](manuales/DEPLOYMENT_MANUAL.pdf): configuración, red, backups, workflows y operación.
+
+Los documentos LaTeX toman el contenido completo de sus archivos Markdown correspondientes y usan los PDF de `docs/manuales/diagrams/` para las figuras. El Markdown es la fuente canónica del contenido. Desde la carpeta `docs/manuales/`, con una distribución TeX que incluya el paquete `markdown`, compilar cada fuente dos veces con XeLaTeX y shell escape para actualizar el índice y generar los PDF en una carpeta temporal:
+
+~~~sh
+cd docs/manuales
+mkdir -p /tmp/creapp-pdf
+xelatex -shell-escape -output-directory=/tmp/creapp-pdf DEVELOPER_MANUAL.tex
+xelatex -shell-escape -output-directory=/tmp/creapp-pdf DEVELOPER_MANUAL.tex
+xelatex -shell-escape -output-directory=/tmp/creapp-pdf DEPLOYMENT_MANUAL.tex
+xelatex -shell-escape -output-directory=/tmp/creapp-pdf DEPLOYMENT_MANUAL.tex
+cp /tmp/creapp-pdf/DEVELOPER_MANUAL.pdf .
+cp /tmp/creapp-pdf/DEPLOYMENT_MANUAL.pdf .
+~~~
+
+Las figuras editables están en `docs/manuales/diagrams/*.tex`. Los enlaces relativos a `diagrams/*.svg` en Markdown y las referencias LaTeX a esos recursos se resuelven desde `docs/manuales/`; compilar los manuales desde esa carpeta. El diagrama de clases del manual de desarrollo se divide en cuatro vistas (`classes-academics`, `classes-planning`, `classes-calendar` y `classes-identity`), que se presentan en páginas horizontales del PDF. Después de modificar una figura, actualizar sus archivos PDF y SVG antes de recompilar los manuales. Desde la raíz del repositorio, con `pdflatex` y `pdftocairo`, se pueden regenerar todos los diagramas así:
+
+~~~sh
+mkdir -p /tmp/creapp-diagrams
+for source in docs/manuales/diagrams/*.tex; do
+  name=$(basename "$source" .tex)
+  pdflatex -interaction=nonstopmode -halt-on-error -output-directory=/tmp/creapp-diagrams "$source" || exit 1
+  pdftocairo -svg "/tmp/creapp-diagrams/$name.pdf" "/tmp/creapp-diagrams/$name.svg" || exit 1
+  cp "/tmp/creapp-diagrams/$name.pdf" "/tmp/creapp-diagrams/$name.svg" docs/manuales/diagrams/
+done
+~~~
+
+El resto de este índice conserva referencias a documentación histórica de mejoras frontend; validar su vigencia contra el código antes de usarla como guía operativa.
+
 ---
 
 ## 📋 Documentation Files
