@@ -6,7 +6,7 @@
 
 Referencia técnica para mantener y extender la aplicación. La fuente de verdad es el código: ante cualquier duda, revise los archivos citados y sus pruebas.
 
-El detalle de ramas, diferencias de routing, deuda técnica y evidencia de validación está en [`APENDICES.md`](APENDICES.md) y [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md). Para publicar en un entorno real, consulte el [manual de despliegue](DEPLOYMENT_MANUAL.md).
+El detalle está en [`APENDICES.md`](APENDICES.md): [referencia de modelos](APENDICES.md#9-referencia-de-modelos), [detalle de endpoints](APENDICES.md#10-detalle-de-endpoints), [contratos de serialización](APENDICES.md#6-contratos-de-serialización), [configuración del cliente](APENDICES.md#12-configuración-del-cliente), [variables de entorno](APENDICES.md#7-variables-de-entorno), [deuda técnica](APENDICES.md#5-deuda-técnica-conocida) y [evidencia de pruebas](APENDICES.md#14-evidencia-de-las-pruebas) y [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md). Para publicar en un entorno real, consulte el [manual de despliegue](DEPLOYMENT_MANUAL.md).
 
 ## 1. Estructura
 

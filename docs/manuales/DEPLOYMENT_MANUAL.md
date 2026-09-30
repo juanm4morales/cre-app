@@ -6,7 +6,7 @@
 
 CREApp es una SPA de React que consume una API Django sobre PostgreSQL. Hay **dos destinos válidos**: un servidor propio (self-hosted) o Microsoft Azure App Service. Ambos se describen aquí con el mismo nivel de detalle; elija según las reglas de red y operación de su institución.
 
-Para el detalle técnico de ramas, diferencias de routing y riesgos conocidos, ver [`APENDICES.md`](APENDICES.md). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
+Para el detalle técnico, ver [`APENDICES.md`](APENDICES.md): variables de entorno y [configuración efectiva](APENDICES.md#7-variables-de-entorno), [restricciones de la receta](APENDICES.md#2-restricciones-de-la-receta-self-hosted), [seguridad y HSTS](APENDICES.md#3-seguridad-y-entorno), [importadores y scripts](APENDICES.md#11-importadores-y-scripts) y [split-origin](APENDICES.md#13-nginx-y-despliegue-split-origin). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
 
 ## 1. Requisitos
 

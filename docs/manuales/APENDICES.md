@@ -75,16 +75,126 @@ No todos los atributos del modelo están expuestos. Antes de asumir que un campo
 - `ActividadAjuste` exige horas extra por encima de cero cuando el tipo es extensión, y que la clase destino pertenezca al programa de la actividad.
 - Las horas se almacenan como decimales. Las pantallas capturan minutos y convierten antes de enviar.
 
-## 7. Detalle del cliente frontend
+## 7. Variables de entorno
 
-- El interceptor de `services/api.ts` adjunta `X-CSRFToken` desde el token guardado en una respuesta o desde la cookie legible, emite un evento global de cambio de datos tras cada mutación y redirige al login ante errores de autenticación, excepto durante la comprobación de sesión y en la propia pantalla de login. No todo 403 es sesión expirada: la detección comprueba el detalle del mensaje.
-- `useApiAutoRefresh` vuelve a pedir datos con retardo tras ese evento, al enfocar la ventana y al volver a ser visible el documento. Las pantallas con React Query invalidan además sus claves; el evento no invalida la caché por sí solo.
-- `AdminCrudPage` resuelve campos opcionales con `emptyAs` cuando el serializer espera `null`, y usa `valueType: 'number'` para claves foráneas numéricas. Su validación de obligatoriedad es superficial: el backend sigue siendo la autoridad.
-- `useDocenteSelection` guarda el espacio, el plan y su nombre en el almacenamiento de sesión, y notifica el cambio con un evento local. Otras pestañas no comparten ese estado de forma automática.
-- `src/utils/errors.ts` traduce errores de red y de campo a mensajes en español; conviene usarlo en lugar de mostrar el error crudo.
-- Tailwind está instalado, pero la mayoría de los estilos viven en hojas de CSS propias con tokens. Respete la convención del archivo del componente antes de introducir variables nuevas.
+El backend carga `backend/.env` con `load_dotenv` desde `BASE_DIR`. Las listas se separan por comas. Los booleanos aceptan `true`, `1`, `yes` y `on`; cualquier otro valor se interpreta como falso.
 
-## 8. Evidencia de las pruebas
+| Variable | Por omisión | Uso |
+|---|---|---|
+| `DEBUG` | `True` | Debe ser `False` en producción |
+| `SECRET_KEY` | Clave insegura fija si `DEBUG` es verdadero | Sin ella y con `DEBUG=False` Django no arranca |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1` | Hostnames exactos, sin esquema |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | Sin valor útil | Base y credenciales |
+| `POSTGRES_HOST` | `localhost` | Host o FQDN |
+| `POSTGRES_PORT` | `5432` | Puerto |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Orígenes exactos con esquema |
+| `CSRF_TRUSTED_ORIGINS` | Igual que CORS | Orígenes de peticiones que modifican datos |
+| `CORS_ALLOW_CREDENTIALS` | Siempre `True` | No se lee del entorno |
+| `CSRF_COOKIE_SECURE`, `SESSION_COOKIE_SECURE` | `False` | `True` con HTTPS |
+| `CSRF_COOKIE_SAMESITE`, `SESSION_COOKIE_SAMESITE` | `Lax` | `None` exige `Secure` |
+| `SECURE_SSL_REDIRECT` | `False` | `True` con proxy HTTPS correcto |
+| `SECURE_HSTS_SECONDS` | `0` | Habilitar gradualmente |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS`, `SECURE_HSTS_PRELOAD` | `False` | Requieren decisión de dominio |
+| `SECURE_CONTENT_TYPE_NOSNIFF` | `True` | Mantener |
+| `X_FRAME_OPTIONS` | `DENY` | Cambiar solo con requisito |
+| `PROXY_ACCESS_SECRET` | Vacío, desactiva el middleware | Secreto compartido con el proxy de acceso |
+| `PROXY_ACCESS_EXEMPT_PATHS` | `/healthz,/sadmin-creapp-panel/,/api/sadmin-creapp-panel/,/api/static/` | Rutas sin exigir la cabecera del proxy |
+
+Variables de compilación del frontend: `VITE_API_URL` (base del cliente HTTP, por omisión `/api`) y `VITE_STATIC_BASE` (base de Vite, por omisión `/`). Se incrustan en el JavaScript público: nunca pueden contener secretos.
+
+## 8. Configuración efectiva
+
+- Idioma `es-ar`, zona horaria `America/Argentina/Mendoza`, `USE_TZ=True`.
+- `DEFAULT_CRE_HOURS = 25` alimenta `ConfiguracionCRE.horas_por_cre`.
+- `STATIC_URL = /api/static/`, `STATIC_ROOT = backend/staticfiles` y `STATICFILES_DIRS` apunta a `frontend/dist`, que además es el directorio de plantillas. El build del frontend entra en los estáticos, por eso debe compilarse antes de `collectstatic`.
+- WhiteNoise con almacenamiento de estáticos comprimidos y manifest.
+- DRF: autenticación por sesión, permiso `IsAuthenticated` por defecto y paginación por número de página con 100 registros.
+- Rutas de redirección de login y logout apuntan al panel en `/api/sadmin-creapp-panel/`.
+- Orden de middleware: seguridad, acceso del proxy, WhiteNoise, sesión, CORS, común, CSRF, autenticación, mensajes y protección de clics.
+- `/healthz` responde texto plano `ok` y no consulta la base de datos.
+- El orden de URLs es: salud, panel, estáticos, API y, al final, una captura que devuelve la SPA. Esa última ruta hace que un path mal escrito responda el HTML de la aplicación con estado 200 en lugar de un 404.
+
+## 9. Referencia de modelos
+
+### academics
+
+| Modelo | Campos y reglas |
+|---|---|
+| `ConfiguracionCRE` | `horas_por_cre` (por omisión 25), `actualizado_en` automático. Singleton por convención: `save()` reutiliza la primera clave existente, `get_instance()` usa la clave 1 y `get_hours_per_cre()` cae al valor por omisión. Sin restricción de unicidad en la base |
+| `UnidadAcademica` | `nombre`, `sigla` única (máx. 10) |
+| `Carrera` | `nombre`, `codigo` único (máx. 20), `unidad_academica` con `PROTECT`, `nivel` `PG`/`G` por omisión `G` |
+| `PlanEstudio` | `carrera` con `PROTECT`, `nombre`, `ordenanza` única, `descripcion` opcional, `creditos` mínimo 1, `vigente_desde`, `vigente_hasta` opcional. Único por carrera y nombre. `horas` es una propiedad: créditos por horas por CRE. La relación con espacios es M2M a través de `PlanEstudioEC` |
+| `PlanEstudioEC` | Une plan y espacio, ambos con `PROTECT`, único por par. No es solo metadato: `Programa.plan_estudio_ec` usa `CASCADE` |
+| `EspacioCurricular` | `codigo` único e indexado (máx. 20), `nombre` indexado, `tipo_espacio` `T1`–`T4`, `anio_cursada` 1 a 10, `periodo` `ANUAL`/`1S`/`2S`, `creditos` mínimo 1, `horas_ip` y `horas_ta` no negativas. `horas_totales` es propiedad |
+| `Competencia` | `plan_estudio` con `PROTECT`, `codigo` (máx. 50) único por plan, `nombre`, `descripcion` opcional, `activo` indexado. Orden por plan y código |
+
+### planning
+
+| Modelo | Campos y reglas |
+|---|---|
+| `AsignacionDocente` | `docente` y `espacio_curricular` con `PROTECT`, `categoria` `TIT`/`ADJ`/`ASO`/`JTP`/`AY1`/`AY2`, `vigente_desde`, `vigente_hasta` opcional. Índices por docente y espacio con fecha. Restricción en base: `vigente_desde <= vigente_hasta`. El manager `activas(fecha)` usa hoy por omisión y límites inclusivos. `clean()` rechaza solapamientos del mismo docente y espacio, pero `save()` no lo invoca. `activo` y `esta_vigente(fecha)` son propiedades calculadas |
+| `Programa` | `plan_estudio_ec` con `CASCADE`, `anio_academico` mínimo 1939 e indexado, `descripcion`, cuatro textos de `0012` (`fundamentacion`, `objetivos_generales`, `objetivos_especificos`, `competencias`) y `activo`. Único por plan-espacio y año |
+| `Unidad` | `programa` con `CASCADE`, `numero` mínimo 1, `descripcion`, `activo`. Único por programa y número |
+| `UnidadCompetencia` | `unidad` con `CASCADE`, `competencia` con `PROTECT`, `orden` mínimo 1. Único por par. `clean()` exige que la competencia pertenezca al plan del programa de la unidad, y `save()` sí invoca `full_clean()` |
+| `DiaClasePrograma` | `programa` con `CASCADE`, `dia_semana` 0 lunes a 6 domingo, `hora_inicio` y `hora_fin` opcionales, `activo`. Único por programa, día y franja. Restricción condicional: inicio antes que fin cuando ambos existen |
+| `ClaseCalendario` | `programa` con `CASCADE`, `dia_clase` opcional que se anula si se borra, `fecha` indexada, `estado` `PLAN`/`DICT`/`CANC`, `observaciones`. Único por programa y fecha. `clean()` exige que el día pertenezca al programa y `save()` invoca `full_clean()` |
+| `TipoActividad` | `nombre` único, `descripcion` opcional, `tipo_dedicacion` `IP`/`TA` por omisión `TA`. `get_tipo_actividad_otros()` crea "Otros" si falta |
+| `Actividad` | `programa` con `CASCADE`, M2M `unidades`, `tipo_actividad` con `SET_DEFAULT` a "Otros", `descripcion`, `modalidad_trabajo` `IND`/`EQU`, `horas` decimal no negativo, `activo`, `clase_calendario` opcional y fechas de trabajo autónomo. `clean()` valida el orden de fechas y que la clase pertenezca al programa, pero `save()` no lo invoca. `espacio_curricular` es propiedad derivada del programa |
+| `ActividadAjuste` | `actividad` con `CASCADE`, `tipo` `REC`/`EXT`, `motivo`, `horas_ip_extra` no negativo, `fecha_evento` opcional, `clase_destino` opcional, `creado_por` con `PROTECT`, `creado_en` automático. `clean()` exige horas extra por encima de cero en una extensión y que la clase destino pertenezca al programa; `save()` invoca `full_clean()` |
+
+## 10. Detalle de endpoints
+
+| Endpoint | Comportamiento |
+|---|---|
+| `/api/unidades-academicas` | Orden por sigla; escritura solo con rol admin |
+| `/api/carreras` | Filtro `unidad_academica_id`; orden por nombre |
+| `/api/configuracion-cre` | Orden por fecha de actualización descendente |
+| `/api/planes-estudio` | Filtro `carrera_id`; serializer valida que la fecha de fin no sea anterior a la de inicio |
+| `/api/planes-estudio-ec` | Filtros `plan_estudio_id` y `espacio_curricular_id`; el borrado se rechaza si hay programas |
+| `/api/espacios-curriculares` | Orden por nombre |
+| `/api/competencias` | Oculta las inactivas salvo `include_inactive=1`; filtro `plan_estudio_id`; el borrado es lógico |
+| `/api/usuarios` | Solo docentes que no son superusuarios; orden por nombre de usuario; el borrado desactiva |
+| `/api/asignaciones-docentes` | Escritura solo admin; filtro por docente y espacio |
+| `/api/tipos-actividad` | Orden por nombre; escritura solo admin |
+| `/api/programas` | Filtro `plan_estudio_ec_id`; ámbito por asignación; el borrado desactiva el programa y sus unidades y actividades |
+| `/api/unidades` | Filtros `programa_id` y `plan_estudio_ec_id`; el detalle incluye las competencias asociadas |
+| `/api/dias-clase` | Filtros por programa y plan-espacio; el borrado es lógico |
+| `/api/actividades` | Filtros por programa y plan-espacio; el detalle añade identificadores de unidad e indicadores de tipo y ajustes |
+| `/api/clases-calendario` | Filtros por programa, plan-espacio y rango de fechas; orden por fecha |
+| `/api/espacios-asignados` | Admin ve todos los espacios; docente, los asignados hoy. Devuelve un array simple, sin paginación |
+
+Los listados usan el serializer de lectura; para crear y actualizar se usan serializers distintos, con validaciones que dependen de la acción. Los borrados lógicos responden con éxito sin eliminar la fila.
+
+## 11. Importadores y scripts
+
+`import_academic_xlsx` acepta la ruta del archivo y exige `--unidad-sigla`, `--unidad-nombre`, `--plan-credits` y `--vigente-desde`; `--career-level` y `--dry-run` son opcionales. Lee la hoja obligatoria `Propuestas`, con las columnas `id_propuesta`, `nombre`, `nombre_plan`, `titulo` y `normativa`, y las hojas opcionales `Espacios`, `Competencias` y `Docentes`. La hoja `Areas` se ignora. Trabaja en una transacción y el modo de ensayo revierte al final. Inserta o actualiza por sigla de unidad, código de carrera, ordenanza de plan, código de espacio, par plan-espacio, par plan y código de competencia, e identidad o correo del docente. El estado de la propuesta infere la fecha de fin cuando indica cierre o baja. Los docentes nuevos se identifican como `docente-<id>` cuando hay legajo, reciben contraseña inutilizable y una asignación vigente desde la fecha indicada; también emite advertencias cuando faltan hojas o un docente referencia un espacio inexistente.
+
+`import_tipo_actividad_xlsx` acepta la ruta y el tipo de dedicación, que por omisión es trabajo autónomo, además del modo de ensayo. Lee la primera hoja desde la fila 3 y toma el nombre, la descripción, los ejemplos y las notas de columnas específicas para componer la descripción. Inserta o actualiza por nombre y **falla con un error claro cuando la dedicación importada difiere de la existente**, en vez de sobrescribirla.
+
+`scripts/release.sh` ejecuta las migraciones y, si encuentra el archivo esperado, la importación académica con la sigla FCE. No sirve como comando genérico de inicialización.
+
+`scripts/db-export.sh` y `scripts/db-import.sh` usan las credenciales del archivo de entorno, o el indicado por `ENV_FILE`, con un analizador simple de líneas `NOMBRE=valor`. No interpretan sintaxis de shell ni configuran SSL: para una base remota hay que exportar además las variables de TLS de libpq. El import crea la base si falta y restaura con limpieza de objetos, por lo que puede reemplazar datos.
+
+## 12. Configuración del cliente
+
+- `QueryClient` global con `staleTime` de cinco minutos, sin recarga al enfocar la ventana y con las herramientas de desarrollo solo en desarrollo.
+- El interceptor de axios emite el evento `cre:api-data-changed` tras cada mutación; `useApiAutoRefresh` vuelve a pedir datos con un retardo de 150 ms al recibirlo, al enfocar la ventana y al volver a ser visible el documento.
+- La sesión se guarda en `localStorage` bajo `cre_auth_user` solo para presentar la interfaz.
+- La selección docente usa `sessionStorage` con las claves del espacio, del plan-espacio y del nombre del espacio.
+- El tema se guarda en `localStorage` como `cre_theme` y se aplica como clase en el elemento raíz, que `index.html` inicializa antes de montar React.
+- `App.css` importa nueve hojas: layout, componentes, tablas, autenticación, modales, calendario, docente, utilidades y responsive.
+- El proxy de desarrollo de Vite reenvía las rutas de API, del panel y de estáticos al backend local, y reescribe el origen de la petición al servidor de desarrollo para que la validación CSRF lo reconozca.
+- Vitest usa jsdom y el archivo de configuración de pruebas; no hay configuración de cobertura. Existe configuración de ESLint, pero ningún script de npm la ejecuta.
+
+## 13. Nginx y despliegue split-origin
+
+Django confía en `X-Forwarded-Proto`, por lo que el proxy debe sobrescribir esa cabecera y las de `Host`, `X-Real-IP`, `X-Forwarded-For` y `X-Forwarded-Host`.
+
+En la variante split-origin con Static Web Apps, el frontend se compila con la URL absoluta del backend en `VITE_API_URL`, y ese valor queda visible en el código del navegador. El backend debe declarar el origen exacto del frontend en CORS y CSRF, sin comodines. Al estar en sitios distintos, las cookies requieren `SameSite=None` y `Secure`, y los navegadores pueden bloquearlas por sus políticas de terceros aunque la configuración sea correcta: hay que probarlas en navegadores reales.
+
+El repositorio incluye `frontend/middleware.js`, una función de edge que inyecta la cabecera de acceso con `@vercel/functions` para las rutas de API, panel y estáticos. Su presencia no implica que exista un runtime de Vercel configurado. El workflow de Static Web Apps tiene el disparo por push desactivado y solo gestiona previsualizaciones de pull request.
+
+## 14. Evidencia de las pruebas
 
 El recorrido de aceptación se ejecutó en contenedores descartables, contra una copia temporal del código elegido. Pasaron 54 pruebas frontend, 78 pruebas Django, las migraciones desde base vacía, la comprobación de estáticos, una sesión real con CSRF, el panel de administración, y un ciclo de respaldo y restauración con coincidencia del recuento de la tabla usada en la prueba.
 
@@ -94,7 +204,7 @@ Dos detalles del propio harness que conviene conocer: el cliente de pruebas de D
 
 El harness es reproducible y está en [`validation/`](validation/README.md). Ejecuta pruebas, no despliega.
 
-## 9. Diagramas
+## 15. Diagramas
 
 Las fuentes editables están en [`diagrams/`](diagrams/), en formato TikZ con sus PDF y SVG.
 
@@ -103,7 +213,7 @@ Las fuentes editables están en [`diagrams/`](diagrams/), en formato TikZ con su
 - Rutas HTTP: `http-routing`.
 - Flujos de despliegue: `deployment-workflows`.
 
-## 10. Documentos relacionados
+## 16. Documentos relacionados
 
 - [`DEPLOYMENT_MANUAL.md`](DEPLOYMENT_MANUAL.md): procedimiento de despliegue.
 - [`DEVELOPER_MANUAL.md`](DEVELOPER_MANUAL.md): arquitectura y contratos internos.
