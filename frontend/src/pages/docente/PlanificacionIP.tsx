@@ -7,6 +7,7 @@ import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import SectionCard from '../../components/Common/SectionCard';
+import { TableSkeleton } from '../../components/Common/Skeleton';
 import PlanningActivityCommonFields from '../../components/Forms/PlanningActivityCommonFields';
 import PlanningCalendar from '../../components/Forms/PlanningCalendar';
 import BasicTable from '../../components/Tables/BasicTable';
@@ -284,7 +285,7 @@ function DocentePlanificacionIP() {
   if (loading) {
     return (
       <SectionCard title="Planificación IP">
-        <p className="muted">Cargando planificación...</p>
+        <TableSkeleton rows={5} cols={4} label="Cargando planificación..." />
       </SectionCard>
     );
   }

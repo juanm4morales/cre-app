@@ -11,6 +11,10 @@ interface Programa {
   plan_estudio_ec: number;
   anio_academico: number;
   descripcion: string;
+  fundamentacion?: string;
+  objetivos_generales?: string;
+  objetivos_especificos?: string;
+  competencias?: string;
 }
 
 interface PaginatedResponse<T> {
@@ -155,6 +159,17 @@ function AdminProgramas() {
               </div>
               <div className="detail-item-value">Plan EC {selected.plan_estudio_ec}</div>
             </div>
+            {([
+              ['Fundamentación', selected.fundamentacion],
+              ['Objetivos generales', selected.objetivos_generales],
+              ['Objetivos específicos', selected.objetivos_especificos],
+              ['Competencias', selected.competencias],
+            ] as const).map(([label, value]) => (
+              <div className="detail-item" key={label}>
+                <div className="detail-item-header"><span className="detail-item-icon"><FileText size={16} /></span><p className="eyebrow">{label}</p></div>
+                <div className="detail-item-value" style={{ whiteSpace: 'pre-wrap' }}>{value || 'Sin información'}</div>
+              </div>
+            ))}
           </div>
           <div className="form-actions mt-3">
             <button className="button button-ghost" type="button" onClick={() => setSelected(null)}>

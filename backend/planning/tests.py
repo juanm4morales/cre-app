@@ -1,9 +1,11 @@
-from datetime import date
+from datetime import date, time
+from importlib import import_module
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from django.core.management import call_command
+from django.apps import apps
+from django.core.management import call_command, CommandError
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -280,7 +282,12 @@ class PlanningRulesTestCase(TestCase):
             tipo_dedicacion=TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO,
         )
 
-        self.dia_lunes = DiaClasePrograma.objects.create(programa=self.programa, dia_semana=0)
+        self.dia_lunes = DiaClasePrograma.objects.create(
+            programa=self.programa,
+            dia_semana=0,
+            hora_inicio=time(8, 0),
+            hora_fin=time(10, 0),
+        )
         self.clase_lunes = ClaseCalendario.objects.create(
             programa=self.programa,
             dia_clase=self.dia_lunes,
@@ -337,6 +344,37 @@ class PlanningRulesTestCase(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("clase_calendario", serializer.errors)
+
+    def test_serializer_rejects_ip_hours_over_class_duration(self):
+        serializer = ActividadCreateSerializer(
+            data={
+                "programa": self.programa.id,
+                "tipo_actividad": self.tipo_ip.id,
+                "descripcion": "Actividad IP extensa",
+                "horas": "3.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [self.unidad_prog.id],
+                "clase_calendario": self.clase_lunes.id,
+            }
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("horas", serializer.errors)
+
+    def test_serializer_allows_ip_hours_within_class_duration(self):
+        serializer = ActividadCreateSerializer(
+            data={
+                "programa": self.programa.id,
+                "tipo_actividad": self.tipo_ip.id,
+                "descripcion": "Actividad IP válida",
+                "horas": "2.00",
+                "modalidad_trabajo": "IND",
+                "unidad_ids": [self.unidad_prog.id],
+                "clase_calendario": self.clase_lunes.id,
+            }
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
     def test_serializer_rejects_class_for_ta(self):
         serializer = ActividadCreateSerializer(
@@ -489,6 +527,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
         workbook.save(file_path)
 
     def test_import_tipo_actividad_xlsx_creates_and_updates_tipificaciones(self):
+        baseline_count = TipoActividad.objects.count()
         with TemporaryDirectory() as temp_dir:
             workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
             self._build_tipificaciones_workbook(workbook_path)
@@ -505,7 +544,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
                 stdout=StringIO(),
             )
 
-        self.assertEqual(TipoActividad.objects.count(), 4)
+        self.assertEqual(TipoActividad.objects.count(), baseline_count + 4)
 
         lectura = TipoActividad.objects.get(nombre="Lectura y comprensión de bibliografía")
         self.assertEqual(lectura.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
@@ -523,6 +562,7 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
         self.assertIn("tipo_actividad", output.getvalue())
 
     def test_import_tipo_actividad_xlsx_dry_run_rolls_back(self):
+        baseline_count = TipoActividad.objects.count()
         with TemporaryDirectory() as temp_dir:
             workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
             self._build_tipificaciones_workbook(workbook_path)
@@ -533,7 +573,57 @@ class ImportTipoActividadXlsxCommandTests(TestCase):
                 "--dry-run",
             )
 
-        self.assertEqual(TipoActividad.objects.count(), 0)
+        self.assertEqual(TipoActividad.objects.count(), baseline_count)
+
+    def test_import_rejects_opposite_dedication_without_mutating_existing_type(self):
+        tipo = TipoActividad.objects.get(nombre="Clase expositiva")
+        tipo.descripcion = "Descripción original"
+        tipo.save(update_fields=["descripcion"])
+
+        with TemporaryDirectory() as temp_dir:
+            workbook_path = Path(temp_dir) / "tipificaciones.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet["A3"] = tipo.nombre
+            sheet["B3"] = "Descripción importada"
+            workbook.save(workbook_path)
+
+            with self.assertRaisesMessage(CommandError, "no se cambiará"):
+                call_command(
+                    "import_tipo_actividad_xlsx",
+                    str(workbook_path),
+                    tipo_dedicacion=TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO,
+                )
+
+        tipo.refresh_from_db()
+        self.assertEqual(tipo.tipo_dedicacion, TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA)
+        self.assertEqual(tipo.descripcion, "Descripción original")
+
+    def test_seed_ip_tipo_actividad_migration_is_idempotent(self):
+        migration = import_module("planning.migrations.0011_seed_ip_tipo_actividad")
+
+        tipo_existente = TipoActividad.objects.get(nombre="Clase expositiva")
+        tipo_existente.tipo_dedicacion = TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO
+        tipo_existente.descripcion = "Tipo TA preexistente"
+        tipo_existente.save(update_fields=["tipo_dedicacion", "descripcion"])
+
+        migration.seed_ip_tipo_actividad(apps, None)
+        migration.seed_ip_tipo_actividad(apps, None)
+
+        tipo_existente.refresh_from_db()
+        self.assertEqual(tipo_existente.tipo_dedicacion, TipoActividad.TipoDedicacion.TRABAJO_AUTONOMO)
+        self.assertEqual(tipo_existente.descripcion, "Tipo TA preexistente")
+        self.assertEqual(
+            TipoActividad.objects.filter(
+                nombre__in=migration.IP_TIPO_ACTIVIDAD_NAMES,
+                tipo_dedicacion=TipoActividad.TipoDedicacion.INTERACCION_PEDAGOGICA,
+            ).count(),
+            len(migration.IP_TIPO_ACTIVIDAD_NAMES) - 1,
+        )
+        self.assertEqual(
+            TipoActividad.objects.filter(nombre="Clase expositiva").count(),
+            1,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -666,6 +756,81 @@ class PlanningFullFlowIntegrationTest(TestCase):
         return resp.cookies["csrftoken"].value
 
     # ── Tests ──
+
+    def test_programa_api_text_sections_create_read_update_and_defaults(self):
+        self._login("admin_plan", "AdminPass1!")
+        token = self._csrf()
+        sections = {
+            "fundamentacion": "Fundamentación inicial",
+            "objetivos_generales": "Objetivos generales iniciales",
+            "objetivos_especificos": "Objetivos específicos iniciales",
+            "competencias": "Competencias iniciales",
+        }
+
+        # Omitted optional sections default to empty strings.
+        response = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.plan_ec.id,
+                "anio_academico": self.current_year,
+                "descripcion": "Programa con valores por defecto",
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        default_programa_id = response.json()["id"]
+        for field in sections:
+            self.assertEqual(response.json()[field], "")
+
+        # Create with all sections, then verify both detail and list reads.
+        response = self.client.post(
+            "/api/programas",
+            {
+                "plan_estudio_ec": self.plan_ec.id,
+                "anio_academico": self.current_year + 1,
+                "descripcion": "Programa completo",
+                **sections,
+            },
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=self._csrf(),
+        )
+        self.assertEqual(response.status_code, 201, response.json())
+        programa_id = response.json()["id"]
+        self.assertEqual({field: response.json()[field] for field in sections}, sections)
+
+        response = self.client.get(f"/api/programas/{programa_id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({field: response.json()[field] for field in sections}, sections)
+
+        response = self.client.get("/api/programas")
+        self.assertEqual(response.status_code, 200)
+        programa = next(item for item in response.json()["results"] if item["id"] == programa_id)
+        self.assertEqual({field: programa[field] for field in sections}, sections)
+
+        updated_sections = {**sections, "fundamentacion": "Fundamentación actualizada"}
+        response = self.client.patch(
+            f"/api/programas/{programa_id}",
+            {"fundamentacion": updated_sections["fundamentacion"]},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=self._csrf(),
+        )
+        self.assertEqual(response.status_code, 200, response.json())
+        self.assertEqual(
+            {field: response.json()[field] for field in sections},
+            updated_sections,
+        )
+
+        default_programa = Programa.objects.get(pk=default_programa_id)
+        self.assertEqual(
+            [
+                default_programa.fundamentacion,
+                default_programa.objetivos_generales,
+                default_programa.objetivos_especificos,
+                default_programa.competencias,
+            ],
+            ["", "", "", ""],
+        )
 
     # ──────── 1. Docente full CRUD flow ────────
 
