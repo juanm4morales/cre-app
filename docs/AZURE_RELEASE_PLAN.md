@@ -1,5 +1,7 @@
 # Azure release plan
 
+**Status:** the pending `0012` migration and the seed/importer safety fix have been applied and published. App Service `cre-app-api` is still `Stopped` and was never started; no smoke test has been run. This document remains the checklist for the next release, not a record of completed work.
+
 **Plan only.** No Azure, Git, or database action is authorized here. The app/database are pre-launch, not a production user-data service: the app has never gone to production and the database contains test/pre-launch data that may be cleaned and freshly imported. That does not itself authorize deleting or replacing data. Azure remains the authoritative product branch; preserve historical branches and do not change CI/CD as part of this plan.
 
 **Maintainability:** keep one product source (`azure`) and one documented installation path. Historical branches are reference only, not compatibility targets. Do not add deprecated adapters, duplicate installers, or speculative migrations. Keep the current migration chain while any database still relies on it; consider simplifying it only after an explicitly authorized reset and a verified install from an empty database.
@@ -7,8 +9,8 @@
 ## Known state at audit time
 
 - App Service `cre-app-api` is stopped. PostgreSQL Flexible Server `cre-app-db` was **Ready** at inspection time, in Chile Central, `Standard_B1ms`, publicly networked, with 7-day backup retention. Observed `earliestRestoreDate`: `2026-09-24T03:38:30Z`; this is time-sensitive and must be rechecked. No restored test server exists. Stopping App Service does not stop PostgreSQL; the no-new-backups-while-stopped caveat applies only if the database server itself is stopped.
-- The database records `planning.0011_seed_ip_tipo_actividad` in `django_migrations`; 0012 is absent, and all four `Programa` fields from 0012 are absent.
-- Local safety fix: branch `omos/product-azure-safety`, commit `6cfae3c`. `origin/azure` at `7180921` still has the original 0011 behavior: for each catalog name it changes an existing same-name `TipoActividad.tipo_dedicacion` to `IP`, potentially changing a TA record. The fix is not yet authoritative. Do not assume the historical effect or data disposition; resolve only what is needed for the chosen path.
+- The database is at `planning.0012_programa_competencias_programa_fundamentacion_and_more`, with no pending migrations and no model/migration drift. All four `Programa` fields added by 0012 exist.
+- Safety fix landed on `azure` as `6cfae3c`: the seed only creates missing `TipoActividad` names, and the XLSX importer rejects a name whose dedication differs instead of mutating it. `origin/azure` no longer carries the original 0011 behavior. The pre-launch database already ran the earlier 0011; that historical effect is not repaired by this fix.
 - `.github/workflows/deploy.yml` runs on pushes to both `main` and `azure`; it builds same-origin SPA config (`VITE_API_URL=/api`, `VITE_STATIC_BASE=/api/static/`), collects static files, and deploys, but does not migrate. A push to `azure` is an automatic deployment trigger. `.github/workflows/main_cre-app-api.yml` also deploys to the same App Service on `main`, duplicating deployment. Do not use `main` as a release path.
 - `scripts/release.sh` runs migrations and imports academic XLSX data. Do not use it as a generic migration or initialization command.
 - Migration 0012 adds `fundamentacion`, `objetivos_generales`, `objetivos_especificos`, and `competencias` to `Programa`. Migration 0009 removes `TipoActividad.modalidad_trabajo`; its legacy-data risk is unresolved. Do not publish `main`.
