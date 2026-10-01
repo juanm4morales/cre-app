@@ -2,9 +2,9 @@
 
 **Autor:** Juan Martín Morales
 **Repositorio:** [github.com/juanm4morales/cre-app](https://github.com/juanm4morales/cre-app)
-**Versión:** 3.0
+**Versión:** 1.0
 
-CREApp es una SPA de React que consume una API Django sobre PostgreSQL. Hay **dos destinos válidos**: un servidor propio (self-hosted) o Microsoft Azure App Service. Ambos se describen aquí con el mismo nivel de detalle; elija según las reglas de red y operación de su institución.
+CREApp es una SPA de React que consume una API Django sobre PostgreSQL. Hay **dos destinos válidos**: un servidor propio (self-hosted) o Microsoft Azure App Service. El procedimiento self-hosted ofrece pasos operativos detallados; la sección de Azure orienta el despliegue, pero debe completarse según la configuración real de los recursos y workflows de la institución.
 
 Para el detalle técnico, ver [`APENDICES.md`](APENDICES.md): variables de entorno y [configuración efectiva](APENDICES.md#7-variables-de-entorno), [restricciones de la receta](APENDICES.md#2-restricciones-de-la-receta-self-hosted), [seguridad y HSTS](APENDICES.md#3-seguridad-y-entorno), [importadores y scripts](APENDICES.md#11-importadores-y-scripts) y [split-origin](APENDICES.md#13-nginx-y-despliegue-split-origin). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
 
@@ -56,6 +56,17 @@ sudo -H -u creapp-build git -C "$RELEASE" fetch --no-tags origin "$REF_APROBADA"
 sudo -H -u creapp-build git -C "$RELEASE" checkout --detach "$SHA_APROBADO"
 test "$(sudo -H -u creapp-build git -C "$RELEASE" rev-parse HEAD)" = "$SHA_APROBADO"
 ```
+
+Ejecute todos los bloques ejecutables `sh` de los pasos 1–7 en una misma sesión Bash: `set -eu` y las variables `SHA_APROBADO`, `REF_APROBADA` y `RELEASE` se mantienen entre bloques. Los bloques SQL, INI, `conf` y Nginx son contenido para sus herramientas, no comandos Bash. Si retoma el procedimiento en una sesión nueva, vuelva a definir ambos valores aprobados y valide el release antes de seguir:
+
+```sh
+: "${SHA_APROBADO:?Defina el SHA aprobado}" "${REF_APROBADA:?Defina la referencia aprobada}"
+git check-ref-format "$REF_APROBADA"
+RELEASE="/srv/creapp/releases/$SHA_APROBADO"
+test "$(sudo -H -u creapp-build git -C "$RELEASE" rev-parse HEAD)" = "$SHA_APROBADO"
+```
+
+Deténgase si alguna comprobación falla.
 
 ### Paso 2 — PostgreSQL privado
 
@@ -115,7 +126,10 @@ El frontend se compila **antes** de `collectstatic`, porque el build entra en lo
 
 ```sh
 set -eu
+: "${SHA_APROBADO:?Defina el SHA aprobado para esta sesión}" "${REF_APROBADA:?Defina la referencia aprobada para esta sesión}"
+git check-ref-format "$REF_APROBADA"
 RELEASE="/srv/creapp/releases/$SHA_APROBADO"
+test "$(sudo -H -u creapp-build git -C "$RELEASE" rev-parse HEAD)" = "$SHA_APROBADO"
 
 sudo -H -u creapp-build python3.13 -m venv "$RELEASE/.venv"
 sudo -H -u creapp-build "$RELEASE/.venv/bin/pip" install --upgrade pip
@@ -131,7 +145,7 @@ sudo find "$RELEASE" -type f -exec chmod u=rwX,g=rX,o= {} +
 sudo install -d -o creapp -g www-data -m 2750 "$RELEASE/backend/staticfiles"
 ```
 
-Los comandos Django se ejecutan con el entorno de producción:
+Los comandos Django se ejecutan con el entorno de producción. **Deténgase antes de `migrate --noinput`** hasta confirmar la identidad de la base configurada, revisar y aprobar el plan, resolver los hallazgos de `check --deploy`, y disponer de un backup reciente cuya restauración haya sido validada en una base aislada. Ejecute la migración únicamente en la ventana aprobada; si cualquiera de estas condiciones falta, no migre.
 
 ```sh
 as_app() {
@@ -144,7 +158,7 @@ as_app() {
 
 as_app check --deploy                              # sin silenciar warnings
 as_app migrate --plan                              # solo muestra el plan
-as_app migrate --noinput                           # requiere backup y ventana
+as_app migrate --noinput
 as_app collectstatic --noinput
 ```
 
@@ -233,11 +247,16 @@ Nginx debe sobrescribir `X-Forwarded-Proto`: Django confía en esa cabecera. Gun
 
 ### Paso 7 — Publicar y verificar
 
-Solo después de compilar, migrar y recolectar estáticos se publica el release:
+**Deténgase antes de cambiar `current`** si build, migraciones autorizadas o `collectstatic` fallaron; compruebe también que TLS, la configuración de Nginx y el destino del release son los aprobados, y que el release anterior sigue disponible para volver atrás. No publique si la compatibilidad del esquema con el release anterior no está confirmada.
+
+Solo después de cumplir esas condiciones se publica el release:
 
 ```sh
 set -eu
+: "${SHA_APROBADO:?Defina el SHA aprobado para esta sesión}" "${REF_APROBADA:?Defina la referencia aprobada para esta sesión}"
+git check-ref-format "$REF_APROBADA"
 RELEASE="/srv/creapp/releases/$SHA_APROBADO"
+test "$(sudo -H -u creapp-build git -C "$RELEASE" rev-parse HEAD)" = "$SHA_APROBADO"
 test -d "$RELEASE/backend/staticfiles"
 test ! -e /srv/creapp/current.next
 sudo ln -s "$RELEASE" /srv/creapp/current.next

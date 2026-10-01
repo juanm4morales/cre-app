@@ -10,20 +10,48 @@ if [[ -z "$SOURCE_DIR" || ! -d "$SOURCE_DIR" ]]; then
 fi
 SOURCE_DIR="$(cd -- "$SOURCE_DIR" && pwd -P)"
 SOURCE_REPO_ROOT="$(git -C "$SOURCE_DIR" rev-parse --show-toplevel 2>/dev/null || printf '%s' "$SOURCE_DIR")"
+SOURCE_REPO_ROOT="$(realpath -e -- "$SOURCE_REPO_ROOT")"
 if [[ -n "${TEST_ROOT:-}" ]]; then
-  mkdir -p -- "$TEST_ROOT"
-  TEST_ROOT="$(cd -- "$TEST_ROOT" && pwd -P)"
+  TEST_ROOT="$(realpath -m -- "$TEST_ROOT")"
 else
   TEST_ROOT="$(mktemp -d /tmp/creapp-selfhost-validation.XXXXXX)"
 fi
 for protected in "$SOURCE_DIR" "$SOURCE_REPO_ROOT"; do
-  case "$TEST_ROOT/" in
-    "$protected/"*)
-      printf 'TEST_ROOT must be outside the selected source/repository tree: %s\n' "$TEST_ROOT" >&2
+  case "$TEST_ROOT" in
+    "$protected"|"$protected"/*)
+      printf 'TEST_ROOT must not be inside or equal to the selected source/repository tree: %s\n' "$TEST_ROOT" >&2
+      exit 2
+      ;;
+  esac
+  case "$protected" in
+    "$TEST_ROOT"/*)
+      printf 'TEST_ROOT must not contain the selected source/repository tree: %s\n' "$TEST_ROOT" >&2
       exit 2
       ;;
   esac
 done
+mkdir -p -- "$TEST_ROOT"
+TEST_ROOT="$(cd -- "$TEST_ROOT" && pwd -P)"
+
+if [[ -n "${SOURCE_SHA:-}" ]]; then
+  [[ "$SOURCE_SHA" =~ ^([[:xdigit:]]{40}|[[:xdigit:]]{64})$ ]] || {
+    printf 'SOURCE_SHA must be a 40- or 64-character hexadecimal immutable source identifier.\n' >&2
+    exit 2
+  }
+  SOURCE_SHA="${SOURCE_SHA,,}"
+  SOURCE_SHA_METHOD=operator-supplied
+else
+  SOURCE_SHA="$(git -C "$SOURCE_DIR" rev-parse --verify HEAD 2>/dev/null || true)"
+  [[ "$SOURCE_SHA" =~ ^([[:xdigit:]]{40}|[[:xdigit:]]{64})$ ]] || {
+    printf 'Set SOURCE_SHA for source archives without Git metadata.\n' >&2
+    exit 2
+  }
+  if [[ -n "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=normal 2>/dev/null)" ]]; then
+    printf 'Git source is not clean; supply an immutable SOURCE_SHA for the exact source.\n' >&2
+    exit 2
+  fi
+  SOURCE_SHA_METHOD=verified-git-head-clean-tree
+fi
 RUNS="$TEST_ROOT/runs"
 RUN_ID="$(date +%Y%m%d%H%M%S)-$$"
 PROJECT="creapp-selfhost-check-$RUN_ID"
@@ -47,8 +75,8 @@ KEEP_STACK="${KEEP:-0}"
 
 printf 'CREApp self-host acceptance run\nProject: %s\nStarted: %s\n' \
   "$PROJECT" "$(date --iso-8601=seconds)" > "$RUN_DIR/results.txt"
-printf 'RUN_DIR=%s\nPROJECT=%s\nTEST_ROOT=%s\nSOURCE_DIR=%s\n' \
-  "$RUN_DIR" "$PROJECT" "$TEST_ROOT" "$SOURCE_DIR" > "$RUN_DIR/run.meta"
+printf 'RUN_DIR=%s\nPROJECT=%s\nTEST_ROOT=%s\nSOURCE_DIR=%s\nSOURCE_SHA=%s\nSOURCE_SHA_METHOD=%s\n' \
+  "$RUN_DIR" "$PROJECT" "$TEST_ROOT" "$SOURCE_DIR" "$SOURCE_SHA" "$SOURCE_SHA_METHOD" > "$RUN_DIR/run.meta"
 
 dc() {
   docker compose --project-directory "$HARNESS" --env-file "$ENV_FILE" \
@@ -107,6 +135,7 @@ trap finish EXIT
 # Refuse to create or run containers until Docker access is available.
 step docker-daemon docker info
 step docker-compose-version docker compose version
+printf 'SOURCE_SHA=%s (%s)\n' "$SOURCE_SHA" "$SOURCE_SHA_METHOD" | tee -a "$RUN_DIR/results.txt"
 
 # Copy only application source. Exclude all dotenv files and local build/data artifacts.
 step prepare-source python3 - "$SOURCE_DIR" "$WORKTREE" <<'PY'
@@ -237,7 +266,6 @@ step compose-static-config docker compose --project-directory "$HARNESS" \
   --env-file "$ENV_FILE" -p "$PROJECT" -f "$HARNESS/compose.yaml" config --quiet
 step backend-image-build docker compose --project-directory "$HARNESS" \
   --env-file "$ENV_FILE" -p "$PROJECT" -f "$HARNESS/compose.yaml" build api
-
 STACK_MAY_EXIST=1
 printf 'Compose project: %s\nHTTPS loopback port: %s\nDatabase host port: none\n' \
   "$PROJECT" "$HTTPS_PORT" >> "$RUN_DIR/results.txt"
@@ -274,6 +302,14 @@ step staticfiles-volume-permissions "${DC[@]}" run --rm --user 0 api \
 step django-collectstatic "${DC[@]}" run --rm api python backend/manage.py collectstatic --noinput
 step create-disposable-admin "${DC[@]}" run --rm api python backend/manage.py createsuperuser --noinput
 step start-api-and-unprivileged-nginx "${DC[@]}" up -d api nginx
+step record-image-digests bash -c '
+  set -eu
+  for image in node:22-bookworm postgres:17 nginxinc/nginx-unprivileged:stable-alpine; do
+    docker image inspect --format "IMAGE {{.RepoTags}} {{.Id}} {{json .RepoDigests}}" "$image" | tee -a "$5/run.meta"
+  done
+  api_image=$(docker compose --project-directory "$1" --env-file "$2" -p "$3" -f "$4" images -q api)
+  docker image inspect --format "IMAGE api {{.Id}} {{json .RepoDigests}}" "$api_image" | tee -a "$5/run.meta"
+' _ "$HARNESS" "$ENV_FILE" "$PROJECT" "$HARNESS/compose.yaml" "$RUN_DIR"
 step nginx-config-test "${DC[@]}" exec -T nginx nginx -t
 step compose-service-state "${DC[@]}" ps --all
 step nginx-published-port docker inspect --format '{{json .NetworkSettings.Ports}}' "$PROJECT-nginx-1"

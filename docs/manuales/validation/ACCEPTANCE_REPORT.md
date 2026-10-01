@@ -1,12 +1,14 @@
 # Informe de aceptación self-hosted (prueba aislada)
 
 **Fecha de ejecución:** 2026-09-30.
-**Source probado:** archive temporal seleccionado de `azure`, en `/tmp/opencode/creapp-selfhost-validation/src`; este informe no registra un SHA de producto.
+**Source probado:** archive temporal seleccionado de `azure`, en `/tmp/opencode/creapp-selfhost-validation/src`; SHA no registrado y, por tanto, fuente histórica **no verificada por identidad inmutable**.
 **Harness empaquetado:** los scripts de `docs/manuales/validation/` se ejecutaron con `SOURCE_DIR` explícito y un `TEST_ROOT` que contiene espacios; no asumieron que el checkout documental fuera código de aplicación.
 
 ## Resultado
 
 La corrida portable empaquetada terminó con `ALL ACCEPTANCE STEPS PASSED` (código de salida 0). Invocación:
+
+> Este resultado pertenece a una corrida anterior a los cambios actuales del harness. No acredita que la regresión del marcador Django Admin, los guards de rutas ni el registro obligatorio de SHA hayan sido ejecutados; no se inventa ni reconstruye retrospectivamente un SHA para aquella fuente.
 
 ```sh
 SOURCE_DIR="/tmp/opencode/creapp-selfhost-validation/src" \

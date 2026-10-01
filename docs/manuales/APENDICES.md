@@ -1,5 +1,7 @@
 # Apéndices técnicos de CREApp
 
+**Versión:** 1.0
+
 Detalle de respaldo para los [manuales de despliegue](DEPLOYMENT_MANUAL.md) y [desarrollo](DEVELOPER_MANUAL.md). Aquí se registran las observaciones de auditoría, las diferencias entre ramas y los riesgos conocidos. Ninguna de estas afirmaciones describe el estado en vivo de Azure.
 
 ## 1. Ramas y diferencias reales
@@ -43,7 +45,7 @@ Sobre cuentas y permisos: `creapp-build` prepara el release, `creapp` ejecuta la
 
 ## 4. Migraciones con historial
 
-`0011_seed_ip_tipo_actividad` crea los nombres de tipo IP que faltan. En versiones anteriores de ese archivo, un nombre existente podía ver su dedicación reescrita a IP. La corrección publicada en la rama de producto evita tanto el seed como el importador, y el importador ahora falla con un error claro ante unaкола dedication distinta. Ninguna de las dos cosas repara una base que ya ejecutó la versión anterior: el efecto histórico solo puede corregirse con una decisión explícita de Retención o reinicio, no con una nueva migración.
+`0011_seed_ip_tipo_actividad` crea los nombres de tipo IP que faltan. En una versión anterior de ese archivo, un nombre existente podía ver su dedicación reescrita a IP. La corrección publicada en la rama de producto impide que la semilla cambie registros existentes; el importador ahora rechaza nombres que ya tengan otra dedicación. Ninguna de las dos cosas repara una base que ya ejecutó la migración anterior: el efecto histórico requiere una decisión explícita sobre conservar o reiniciar los datos, no una migración automática.
 
 `0012` agrega cuatro campos de texto a `Programa` y no crea relaciones de competencias. El nombre de la migración puede sugerir lo contrario.
 

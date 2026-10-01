@@ -29,6 +29,14 @@ def fail(message: str) -> None:
     raise AssertionError(message)
 
 
+def is_django_admin_html(status: int, content_type: str, body: bytes) -> bool:
+    return (
+        status == 200
+        and "text/html" in content_type.lower()
+        and b'id="site-name"' in body
+    )
+
+
 def main() -> None:
     base_url = os.environ["BASE_URL"]
     ca_file = os.environ["CA_FILE"]
@@ -162,8 +170,8 @@ def main() -> None:
     if status != 200 or json.loads(body).get("username") != username:
         fail("/api/auth/me no confirmó la sesión")
     status, headers, body = request("GET", "/api/sadmin-creapp-panel/")
-    if status != 200 or "text/html" not in headers.get("content-type", ""):
-        fail(f"Django Admin no respondió HTML: HTTP {status}")
+    if not is_django_admin_html(status, headers.get("content-type", ""), body):
+        fail(f"Django Admin no devolvió su marcador HTML esperado: HTTP {status}")
     print("PASS sesión /auth/me y Django Admin detrás de /api/")
 
     sigla = "Q" + os.urandom(4).hex().upper()

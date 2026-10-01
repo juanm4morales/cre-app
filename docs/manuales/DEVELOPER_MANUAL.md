@@ -2,7 +2,7 @@
 
 **Autor:** Juan Martín Morales
 **Repositorio:** [github.com/juanm4morales/cre-app](https://github.com/juanm4morales/cre-app)
-**Versión:** 3.0
+**Versión:** 1.0
 
 Referencia técnica para mantener y extender la aplicación. La fuente de verdad es el código: ante cualquier duda, revise los archivos citados y sus pruebas.
 
@@ -23,26 +23,64 @@ El detalle está en [`APENDICES.md`](APENDICES.md): [referencia de modelos](APEN
 
 ## 2. Entorno local
 
-```sh
-python3 -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-cp backend/.env.example backend/.env      # ajustar credenciales
+### Requisitos
 
-cd backend && docker compose up -d        # PostgreSQL de desarrollo
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
-```
+Desde la raíz del repositorio, tenga disponibles Python 3.13 con `venv`/`pip` (la versión usada por el workflow de despliegue), Docker con Docker Compose y Node.js 22 LTS con npm. Cada paso indica su directorio de partida; una terminal nueva no hereda el directorio actual ni la activación del entorno virtual de otra.
 
-En otra terminal:
+### Preparar el backend
+
+En una terminal situada en la raíz del repositorio:
 
 ```sh
-cd frontend && npm ci && npm run dev      # http://localhost:5173
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -r requirements.txt
+cp backend/.env.example backend/.env
 ```
 
-Variables: el backend lee `backend/.env`; el frontend solo lee `VITE_API_URL` y `VITE_STATIC_BASE`, y ambas son de **compilación**. En same-origin use `VITE_API_URL=/api` y `VITE_STATIC_BASE=/api/static/`.
+Edite `backend/.env` con valores locales antes de continuar. Compose interpola `POSTGRES_DB`, `POSTGRES_USER` y `POSTGRES_PASSWORD` desde el archivo `.env` de su directorio de proyecto; por eso ejecute Compose desde `backend/`, donde están `docker-compose.yaml` y `backend/.env`. Django carga el archivo por separado mediante `load_dotenv()` en `backend/config/settings.py`. Compose levanta **solo PostgreSQL**, no Django ni Vite.
 
-El Compose del repositorio levanta **solo PostgreSQL**, no la aplicación. No es un despliegue de producción.
+### Iniciar y comprobar PostgreSQL
+
+En una terminal situada en la raíz del repositorio (puede ser nueva):
+
+```sh
+cd backend
+docker compose up -d
+docker compose exec db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+Continúe solo cuando `pg_isready` informe que acepta conexiones. Si el contenedor no inicia o la base no está lista, deténgase y resuelva el problema antes de migrar.
+
+### Migrar e iniciar Django
+
+En otra terminal, situada en la raíz del repositorio; el comando usa directamente el Python del entorno virtual y no depende de haberlo activado en esa terminal:
+
+```sh
+cd backend
+../.venv/bin/python manage.py migrate
+```
+
+La señal de éxito es que Django termine sin errores, mostrando migraciones aplicadas con `OK` o `No migrations to apply`. Si falla la conexión, una migración o no obtiene esa señal, deténgase y revise `backend/.env`, PostgreSQL y el esquema antes de seguir. Para crear una cuenta administradora, ejecute `../.venv/bin/python manage.py createsuperuser` desde `backend/`. Inicie el servidor de desarrollo con:
+
+```sh
+cd backend
+../.venv/bin/python manage.py runserver
+```
+
+La señal de inicio correcto es que Django indique que sirve en `http://127.0.0.1:8000/`.
+
+### Iniciar Vite
+
+En una segunda terminal independiente, situada en la raíz del repositorio:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+La señal de inicio correcto es la URL local de Vite, normalmente `http://localhost:5173/`. En desarrollo, el navegador usa `/api` y Vite reenvía las solicitudes a Django. Para el build same-origin, `VITE_API_URL=/api` y `VITE_STATIC_BASE=/api/static/` son valores de **compilación**; Django lee su configuración al iniciar el proceso. No confunda variables del frontend con el `.env` del backend. Este Compose no despliega la aplicación ni es una configuración de producción; para autohospedaje, consulte el [manual de despliegue](DEPLOYMENT_MANUAL.md).
 
 ## 3. Backend
 
@@ -87,7 +125,7 @@ El alcance de un docente son sus espacios con asignación vigente hoy, no la his
 
 ### 3.3 API
 
-El router no usa barra final: `/api/programas`, no `/api/programas/`. Los listados usan paginación de 100 y responden `{count, next, previous, results}`, salvo `espacios-asignados`, que devuelve un array simple.
+El router no usa barra final: `/api/programas`, no `/api/programas/`. Los listados usan paginación de 100 y responden `{count, next, previous, results}`, salvo `espacios-asignados`, que devuelve un array simple. La tabla siguiente y el detalle de endpoints del apéndice son inventarios orientativos, no el contrato completo ni una lista exhaustiva de respuestas válidas y negativas. Para el comportamiento vigente, consulte [`api_urls.py`](../../backend/config/api_urls.py), los serializers de [`accounts`](../../backend/accounts/serializers.py), [`academics`](../../backend/academics/serializers.py) y [`planning`](../../backend/planning/serializers.py), y sus [pruebas de autenticación](../../backend/accounts/tests.py), [pruebas académicas](../../backend/academics/tests.py) y [pruebas de planificación](../../backend/planning/tests.py). En particular, estos resúmenes no enumeran todos los rechazos por autenticación, permisos o entrada inválida.
 
 | Recurso | Filtros de lista | Reglas |
 |---|---|---|
