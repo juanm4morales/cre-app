@@ -6,7 +6,7 @@
 
 CREApp es una SPA de React que consume una API Django sobre PostgreSQL. Hay **dos destinos válidos**: un servidor propio (self-hosted) o Microsoft Azure App Service. El procedimiento self-hosted ofrece pasos operativos detallados; la sección de Azure orienta el despliegue, pero debe completarse según la configuración real de los recursos y workflows de la institución.
 
-Para el detalle técnico, ver [`APENDICES.md`](APENDICES.md): variables de entorno y [configuración efectiva](APENDICES.md#7-variables-de-entorno), [restricciones de la receta](APENDICES.md#2-restricciones-de-la-receta-self-hosted), [seguridad y HSTS](APENDICES.md#3-seguridad-y-entorno), [importadores y scripts](APENDICES.md#11-importadores-y-scripts) y [split-origin](APENDICES.md#13-nginx-y-despliegue-split-origin). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
+Para el detalle técnico, ver [`APENDICES.md`](APENDICES.md): variables de entorno y [configuración efectiva](APENDICES.md#7-variables-de-entorno), [restricciones de la receta](APENDICES.md#2-restricciones-de-la-receta-self-hosted), [seguridad y HSTS](APENDICES.md#3-seguridad-y-entorno), [importadores y scripts](APENDICES.md#11-importadores-y-scripts) y [split-origin](APENDICES.md#13-nginx-y-despliegue-split-origin). Para la evidencia de las pruebas ejecutadas, ver [`validation/ACCEPTANCE_REPORT.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/manuales/validation/ACCEPTANCE_REPORT.md).
 
 ## 1. Requisitos
 
@@ -383,7 +383,7 @@ El arranque en frío puede tardar 30 a 90 segundos: configure los tiempos de esp
 
 El harness de aceptación ejecutó el recorrido completo en un entorno aislado: Node 22, Python 3.13, PostgreSQL 17, Gunicorn y Nginx con TLS de prueba. Pasaron 54 pruebas frontend, 78 pruebas Django, las migraciones desde base vacía, la sesión con CSRF, el panel de administración, los estáticos y un ciclo de respaldo y restauración.
 
-Ese recorrido **no** cubre Azure, una VM con systemd, DNS o certificados públicos, PostgreSQL remoto ni la política real de cookies del navegador. Repita estas verificaciones contra el destino que vaya a usar. Los detalles están en [`validation/ACCEPTANCE_REPORT.md`](validation/ACCEPTANCE_REPORT.md).
+Ese recorrido **no** cubre Azure, una VM con systemd, DNS o certificados públicos, PostgreSQL remoto ni la política real de cookies del navegador. Repita estas verificaciones contra el destino que vaya a usar. Los detalles están en [`validation/ACCEPTANCE_REPORT.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/manuales/validation/ACCEPTANCE_REPORT.md).
 
 ## 7. Referencias
 

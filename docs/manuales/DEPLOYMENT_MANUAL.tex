@@ -57,6 +57,20 @@
     \texttt { \tl_use:N \l_tmpa_tl }
   }
 \cs_new_eq:NN \creappCodeSpan \creapp_code_span:n
+\cs_new_protected:Npn \creapp_markdown_link:nn #1#2
+  {
+    \tl_set:Nn \l_tmpa_tl { #2 }
+    \regex_replace_once:nnN { \# .* \Z } { } \l_tmpa_tl
+    \regex_replace_once:nnN { \A .* / } { } \l_tmpa_tl
+    \str_case:VnF \l_tmpa_tl
+      {
+        { APENDICES.md } { \href{APENDICES.pdf}{#1} }
+        { DEPLOYMENT_MANUAL.md } { \href{DEPLOYMENT_MANUAL.pdf}{#1} }
+        { DEVELOPER_MANUAL.md } { \href{DEVELOPER_MANUAL.pdf}{#1} }
+      }
+      { \href{#2}{#1} }
+  }
+\cs_new_eq:NN \creappMarkdownLink \creapp_markdown_link:nn
 \ExplSyntaxOff
 \markdownSetup{
   pipeTables=true,
@@ -64,7 +78,7 @@
   fencedCode=true,
   rendererPrototypes={
     image={\creappMarkdownImage{#3}{#1}},
-    link={\href{#3}{#1}},
+    link={\creappMarkdownLink{#1}{#3}},
     headingOne={\creappHeadingOne{#1}},
     codeSpan={\creappCodeSpan{#1}},
     underscore={\textunderscore\allowbreak}

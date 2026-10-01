@@ -49,7 +49,7 @@ Sobre cuentas y permisos: `creapp-build` prepara el release, `creapp` ejecuta la
 
 `0012` agrega cuatro campos de texto a `Programa` y no crea relaciones de competencias. El nombre de la migración puede sugerir lo contrario.
 
-El plan de liberación de Azure y el resguardo de datos anteriores a la migración `0009` se conservan en [`../AZURE_RELEASE_PLAN.md`](../AZURE_RELEASE_PLAN.md) y [`../LEGACY_MODALIDAD_MIGRATION.md`](../LEGACY_MODALIDAD_MIGRATION.md). Ambos registran observaciones de una auditoría previa, no un estado verificado en el momento de leerlos.
+El plan de liberación de Azure y el resguardo de datos anteriores a la migración `0009` se conservan en [`AZURE_RELEASE_PLAN.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/AZURE_RELEASE_PLAN.md) y [`LEGACY_MODALIDAD_MIGRATION.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/LEGACY_MODALIDAD_MIGRATION.md). Ambos registran observaciones de una auditoría previa, no un estado verificado en el momento de leerlos.
 
 ## 5. Deuda técnica conocida
 
@@ -204,11 +204,11 @@ Límites: no cubre Azure, una VM con systemd, DNS o certificados públicos, Post
 
 Dos detalles del propio harness que conviene conocer: el cliente de pruebas de Django usa HTTP local, por lo que solo ese proceso desactiva la redirección a HTTPS, mientras el servicio bajo prueba la mantiene; y un intento inicial falló con 400 por no incluir el host de prueba en `ALLOWED_HOSTS`, un defecto del fixture que no cambió configuración del producto.
 
-El harness es reproducible y está en [`validation/`](validation/README.md). Ejecuta pruebas, no despliega.
+El harness es reproducible y está en [`validation/`](https://github.com/juanm4morales/cre-app/tree/docs/developer-handbook/docs/manuales/validation). Ejecuta pruebas, no despliega.
 
 ## 15. Diagramas
 
-Las fuentes editables están en [`diagrams/`](diagrams/), en formato TikZ con sus PDF y SVG.
+Las fuentes editables están en [`diagrams/`](https://github.com/juanm4morales/cre-app/tree/docs/developer-handbook/docs/manuales/diagrams), en formato TikZ con sus PDF y SVG.
 
 - Catálogo académico y planificación: `classes-academics`, `classes-planning`, `classes-calendar`, `classes-identity`. No incluyen `ConfiguracionCRE`, que se documenta en la tabla del manual de desarrollo.
 - Topología del servidor propio: `deployment`.
@@ -219,5 +219,5 @@ Las fuentes editables están en [`diagrams/`](diagrams/), en formato TikZ con su
 
 - [`DEPLOYMENT_MANUAL.md`](DEPLOYMENT_MANUAL.md): procedimiento de despliegue.
 - [`DEVELOPER_MANUAL.md`](DEVELOPER_MANUAL.md): arquitectura y contratos internos.
-- [`../AZURE_RELEASE_PLAN.md`](../AZURE_RELEASE_PLAN.md): controles de liberación en Azure.
-- [`../LEGACY_MODALIDAD_MIGRATION.md`](../LEGACY_MODALIDAD_MIGRATION.md): resguardo de datos anteriores a la migración `0009`.
+- [`AZURE_RELEASE_PLAN.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/AZURE_RELEASE_PLAN.md): controles de liberación en Azure.
+- [`LEGACY_MODALIDAD_MIGRATION.md`](https://github.com/juanm4morales/cre-app/blob/docs/developer-handbook/docs/LEGACY_MODALIDAD_MIGRATION.md): resguardo de datos anteriores a la migración `0009`.
